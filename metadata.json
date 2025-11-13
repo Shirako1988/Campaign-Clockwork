@@ -1,5 +1,0 @@
-{
-  "name": "D&D Campaign Timekeeper",
-  "description": "An application for Dungeon Masters to meticulously track in-game time, date, and events. It features a thematic fantasy interface and uses AI to suggest time costs for player actions.",
-  "requestFramePermissions": []
-}
