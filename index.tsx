@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -96,6 +97,18 @@ const ImportIcon = (props) => (
   </svg>
 );
 
+const SunriseIcon = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M5.25 6.75h13.5m-13.5 9H12M5.25 6.75A2.25 2.25 0 017.5 4.5h9a2.25 2.25 0 012.25 2.25v.75" />
+  </svg>
+);
+
+const SunsetIcon = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M5.25 6.75h13.5m-13.5 9H12m-6.75-9a2.25 2.25 0 002.25-2.25h9a2.25 2.25 0 002.25 2.25v.75" />
+  </svg>
+);
+
 
 // --- From constants.ts ---
 
@@ -150,6 +163,7 @@ const CLIMATE_ZONES = [
   {
     id: 'temperate',
     name: 'Gemäßigt',
+    sunlight: { solstice: { short: 9.5, long: 14.5 } },
     seasonalData: [
       { tempRange: [-5, 5], weatherTypes: [{...WT_CLOUDY, weight: 45}, {...WT_SNOW, weight: 30}, {...WT_SUNNY, description: 'Klare, kalte Sonne', weight: 15}, {...WT_SLEET, weight: 10}] }, // Jan
       { tempRange: [-4, 6], weatherTypes: [{...WT_CLOUDY, weight: 40}, {...WT_SNOW, weight: 30}, {...WT_RAIN, weight: 15}, {...WT_SUNNY, description: 'Klare, kalte Sonne', weight: 15}] }, // Feb
@@ -168,6 +182,7 @@ const CLIMATE_ZONES = [
   {
     id: 'arctic',
     name: 'Arktis',
+    sunlight: { solstice: { short: 4, long: 20 } },
     seasonalData: [
       { tempRange: [-25, -15], weatherTypes: [{...WT_SNOW, weight: 50}, {...WT_BLIZZARD, weight: 30}, {...WT_CLOUDY, description: "Polarnacht", weight: 20}] },
       { tempRange: [-22, -12], weatherTypes: [{...WT_SNOW, weight: 55}, {...WT_BLIZZARD, weight: 25}, {...WT_CLOUDY, description: "Polarnacht", weight: 20}] },
@@ -186,6 +201,7 @@ const CLIMATE_ZONES = [
    {
     id: 'desert',
     name: 'Wüste',
+    sunlight: { solstice: { short: 10.5, long: 13.5 } },
     seasonalData: [
       { tempRange: [5, 20], weatherTypes: [{...WT_SUNNY, description: "Klare, milde Sonne", weight: 80}, {...WT_WINDY, weight: 20}] },
       { tempRange: [8, 24], weatherTypes: [{...WT_SUNNY, description: "Klare, warme Sonne", weight: 70}, {...WT_SANDSTORM, weight: 30}] },
@@ -204,6 +220,7 @@ const CLIMATE_ZONES = [
   {
     id: 'tropical',
     name: 'Tropen',
+    sunlight: { solstice: { short: 11.5, long: 12.5 } },
     seasonalData: [
       { tempRange: [24, 33], weatherTypes: [{...WT_SUNNY, weight: 70}, {...WT_HUMID, weight: 25}, {...WT_RAIN, weight: 5}] },
       { tempRange: [25, 34], weatherTypes: [{...WT_SUNNY, weight: 80}, {...WT_HUMID, weight: 20}] },
@@ -222,6 +239,7 @@ const CLIMATE_ZONES = [
   {
     id: 'alpine',
     name: 'Gebirge',
+    sunlight: { solstice: { short: 9, long: 15 } },
     seasonalData: [
       { tempRange: [-15, -2], weatherTypes: [{...WT_SNOW, weight: 50}, {...WT_BLIZZARD, weight: 30}, {...WT_CLOUDY, weight: 20}] },
       { tempRange: [-12, 0], weatherTypes: [{...WT_SNOW, weight: 60}, {...WT_WINDY, weight: 25}, {...WT_SUNNY, description: 'Scharfe, kalte Sonne', weight: 15}] },
@@ -240,6 +258,7 @@ const CLIMATE_ZONES = [
   {
     id: 'coastal',
     name: 'Küste',
+    sunlight: { solstice: { short: 9.5, long: 14.5 } },
     seasonalData: [
       { tempRange: [2, 10], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_STORM, weight: 30}, {...WT_FOG, weight: 20}, {...WT_CLOUDY, weight: 10}] },
       { tempRange: [3, 11], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_CLOUDY, weight: 30}, {...WT_FOG, weight: 20}, {...WT_STORM, weight: 10}] },
@@ -258,6 +277,7 @@ const CLIMATE_ZONES = [
     {
     id: 'swamp',
     name: 'Sumpfland',
+    sunlight: { solstice: { short: 11, long: 13 } },
     seasonalData: [
       { tempRange: [2, 12], weatherTypes: [{...WT_FOG, weight: 40}, {...WT_RAIN, description: "Kalter Nieselregen", weight: 30}, {...WT_CLOUDY, weight: 30}] },
       { tempRange: [3, 13], weatherTypes: [{...WT_FOG, weight: 35}, {...WT_RAIN, weight: 35}, {...WT_CLOUDY, weight: 30}] },
@@ -276,6 +296,7 @@ const CLIMATE_ZONES = [
   {
     id: 'scorching_wastes',
     name: 'Sengende Ödnis',
+    sunlight: { solstice: { short: 10.5, long: 13.5 } },
     seasonalData: [
       { tempRange: [30, 45], weatherTypes: [{...WT_SCORCHING, weight: 70}, {...WT_SANDSTORM, description: 'Heißer Sandsturm', weight: 30}] },
       { tempRange: [32, 48], weatherTypes: [{...WT_SCORCHING, weight: 70}, {...WT_SANDSTORM, description: 'Heißer Sandsturm', weight: 30}] },
@@ -294,6 +315,7 @@ const CLIMATE_ZONES = [
   {
     id: 'frozen_wastes',
     name: 'Eiswüste',
+    sunlight: { solstice: { short: 0, long: 24 } },
     seasonalData: [
       { tempRange: [-60, -50], weatherTypes: [{...WT_BLIZZARD, weight: 70}, {...WT_SNOW, weight: 20}, {...WT_FOG, description: 'Gefrierender Nebel', weight: 10}] },
       { tempRange: [-58, -48], weatherTypes: [{...WT_BLIZZARD, weight: 60}, {...WT_SNOW, weight: 30}, {...WT_FOG, description: 'Gefrierender Nebel', weight: 10}] },
@@ -338,6 +360,9 @@ const useTime = (initialDate) => {
   }, []);
 
   const formatTimeString = useCallback((date) => {
+    if (!date || isNaN(date.getTime())) {
+        return '00:00';
+    }
     return date.toLocaleTimeString('de-DE', {
       hour: '2-digit',
       minute: '2-digit',
@@ -397,7 +422,7 @@ async function getSmartTimeSuggestion(prompt) {
 
 // --- From components/DailyTimelineVisualizer.tsx ---
 
-const DailyTimelineVisualizer = ({ events, currentTime }) => {
+const DailyTimelineVisualizer = ({ events, currentTime, sunlightData }) => {
     const totalMinutesInDay = 24 * 60;
     
     const nowInMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
@@ -405,9 +430,23 @@ const DailyTimelineVisualizer = ({ events, currentTime }) => {
 
     const sortedEvents = [...events].reverse();
 
+    const getMinutesFromDate = (date) => date.getHours() * 60 + date.getMinutes();
+    
+    const dawnStartPercent = (getMinutesFromDate(sunlightData.dawn) / totalMinutesInDay) * 100;
+    const sunrisePercent = (getMinutesFromDate(sunlightData.sunrise) / totalMinutesInDay) * 100;
+    const sunsetPercent = (getMinutesFromDate(sunlightData.sunset) / totalMinutesInDay) * 100;
+    const duskEndPercent = (getMinutesFromDate(sunlightData.dusk) / totalMinutesInDay) * 100;
+
     return (
         <div className="my-6 p-4 bg-stone-900/50 rounded-lg">
             <div className="relative h-8 bg-stone-700 rounded w-full overflow-hidden border border-stone-600">
+                {/* Background Phases */}
+                <div className="absolute top-0 bottom-0 left-0 h-full bg-blue-900/40" style={{width: `${dawnStartPercent}%`}} title="Nacht"></div>
+                <div className="absolute top-0 bottom-0 h-full bg-orange-400/30" style={{left: `${dawnStartPercent}%`, width: `${sunrisePercent - dawnStartPercent}%`}} title="Morgendämmerung"></div>
+                <div className="absolute top-0 bottom-0 h-full bg-amber-200/20" style={{left: `${sunrisePercent}%`, width: `${sunsetPercent - sunrisePercent}%`}} title="Tageslicht"></div>
+                <div className="absolute top-0 bottom-0 h-full bg-orange-400/30" style={{left: `${sunsetPercent}%`, width: `${duskEndPercent - sunsetPercent}%`}} title="Abenddämmerung"></div>
+                <div className="absolute top-0 bottom-0 h-full bg-blue-900/40" style={{left: `${duskEndPercent}%`, right: '0'}} title="Nacht"></div>
+
                 {sortedEvents.map(event => {
                     const startDate = new Date(event.id);
                     
@@ -465,16 +504,24 @@ const DailyTimelineVisualizer = ({ events, currentTime }) => {
             </div>
             
             {/* Hour Markers */}
-            <div className="relative flex justify-between mt-2 text-xs text-stone-400 px-1">
-                <span>00:00</span>
-                <span>03:00</span>
-                <span>06:00</span>
-                <span>09:00</span>
-                <span>12:00</span>
-                <span>15:00</span>
-                <span>18:00</span>
-                <span>21:00</span>
-                <span className="absolute right-0 pr-1">24:00</span>
+            <div className="relative h-4 mt-2 text-xs text-stone-400">
+                {['00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00'].map((time, index) => {
+                    const hour = index * 3;
+                    const leftPercent = (hour / 24) * 100;
+                    
+                    const transform = hour === 0 ? 'none' : 'translateX(-50%)';
+
+                    return (
+                        <span
+                            key={time}
+                            className="absolute"
+                            style={{ left: `${leftPercent}%`, transform }}
+                        >
+                            {time}
+                        </span>
+                    );
+                })}
+                <span className="absolute right-0">24:00</span>
             </div>
         </div>
     );
@@ -583,22 +630,93 @@ const DowntimeModal = ({ isOpen, onClose, onConfirm }) => {
   );
 };
 
+// --- New SunlightTracker component ---
+const SunlightTracker = ({ sunlightData, currentTime, formatTimeString }) => {
+    if (!sunlightData) return null;
+
+    const { dawn, sunrise, sunset, dusk, state } = sunlightData;
+
+    const currentTimeDecimal = currentTime.getHours() + currentTime.getMinutes() / 60;
+    const sunriseDecimal = sunrise.getHours() + sunrise.getMinutes() / 60;
+    const sunsetDecimal = sunset.getHours() + sunset.getMinutes() / 60;
+
+    let sunPositionPercent = 0;
+    if (currentTimeDecimal > sunriseDecimal && currentTimeDecimal < sunsetDecimal) {
+        sunPositionPercent = ((currentTimeDecimal - sunriseDecimal) / (sunsetDecimal - sunriseDecimal)) * 100;
+    } else if (currentTimeDecimal >= sunsetDecimal) {
+        sunPositionPercent = 100;
+    }
+
+    const stateText = {
+        DAWN: 'Morgendämmerung',
+        DAYLIGHT: 'Tageslicht',
+        DUSK: 'Abenddämmerung',
+        NIGHT_AM: 'Nacht',
+        NIGHT_PM: 'Nacht'
+    }[state];
+    
+    const tooltipText = `
+        ${stateText}
+        Dämmerung: ${formatTimeString(dawn)}
+        Sonnenaufgang: ${formatTimeString(sunrise)}
+        Sonnenuntergang: ${formatTimeString(sunset)}
+    `;
+
+    // Precise trigonometric calculation for icon position
+    const angleRad = (Math.PI * sunPositionPercent) / 100; // Angle from 0 to PI
+    // We want to go from PI to 2*PI for the top semi-circle
+    const theta = Math.PI + angleRad;
+    
+    const svgCenterX = 50;
+    const svgCenterY = 50;
+    const svgRadius = 45;
+
+    // Calculate position in SVG coordinate system
+    const svgX = svgCenterX + svgRadius * Math.cos(theta);
+    const svgY = svgCenterY + svgRadius * Math.sin(theta);
+    
+    // Convert SVG coordinates to percentage for absolute positioning
+    const leftPercent = (svgX / 100) * 100;
+    const topPercent = (svgY / 50) * 100;
+
+    return (
+        <div className="relative w-24 h-12" title={tooltipText}>
+            <svg viewBox="0 0 100 50" className="w-full h-full absolute">
+                <path d="M 5 50 A 45 45 0 0 1 95 50" stroke="rgba(252, 211, 77, 0.4)" strokeWidth="2" fill="none" />
+            </svg>
+            <div 
+              className="absolute w-6 h-6 text-amber-300 transition-all duration-500 ease-in-out"
+              style={{
+                left: `${leftPercent}%`,
+                top: `${topPercent}%`,
+                transform: 'translate(-50%, -50%)'
+              }}
+            >
+              {state.startsWith('NIGHT') ? <MoonIcon className="w-full h-full opacity-80" /> : <SunIcon className="w-full h-full" />}
+            </div>
+             <div className="absolute -bottom-1 left-0 text-stone-400" title={`Sonnenaufgang: ${formatTimeString(sunrise)}`}><SunriseIcon className="w-4 h-4"/></div>
+             <div className="absolute -bottom-1 right-0 text-stone-400" title={`Sonnenuntergang: ${formatTimeString(sunset)}`}><SunsetIcon className="w-4 h-4"/></div>
+        </div>
+    );
+};
+
 
 // --- From components/Header.tsx ---
 
 const Header = ({ 
   dateString, 
   timeString, 
-  hour, 
   onReset, 
   weather, 
   climateZone, 
   onClimateZoneChange, 
   onOpenSetDateModal,
   activeSaveName,
-  onOpenSaveManager
+  onOpenSaveManager,
+  sunlightData,
+  currentDate,
+  formatTimeString
 }) => {
-  const isDay = hour >= 6 && hour < 18;
   const WeatherIcon = weather.icon || SunIcon;
 
   return (
@@ -620,9 +738,7 @@ const Header = ({
                     <span className="font-bold text-xl">{weather.temperature}°C</span>
                 </div>
             </div>
-             <div className="text-amber-300">
-                {isDay ? <SunIcon className="w-8 h-8 md:w-10 md:h-10" /> : <MoonIcon className="w-8 h-8 md:w-10 md:h-10" />}
-            </div>
+             <SunlightTracker sunlightData={sunlightData} currentTime={currentDate} formatTimeString={formatTimeString} />
             <div className="text-right">
               <button
                 onClick={onOpenSetDateModal}
@@ -1079,7 +1195,7 @@ const TimelineItem = ({ event, isFirst = false, ...rest }) => {
     );
 };
 
-const Timeline = ({ events, archivedDays, currentDate }) => {
+const Timeline = ({ events, archivedDays, currentDate, sunlightData }) => {
   if (events.length === 0 && archivedDays.length === 0) {
     return (
       <div className="h-full flex items-center justify-center bg-stone-800 bg-opacity-70 rounded-lg p-8">
@@ -1121,7 +1237,7 @@ const Timeline = ({ events, archivedDays, currentDate }) => {
         Aktueller Tag
       </h2>
       
-      <DailyTimelineVisualizer events={events} currentTime={currentDate} />
+      <DailyTimelineVisualizer events={events} currentTime={currentDate} sunlightData={sunlightData} />
 
       {events.length > 0 ? (
         events.map((event, index) => (
@@ -1231,6 +1347,53 @@ const WeatherLegend = ({ currentWeather }) => {
   );
 };
 
+const calculateSunlight = (date, climateZoneId) => {
+    const zone = CLIMATE_ZONES.find(z => z.id === climateZoneId) || CLIMATE_ZONES[0];
+    const { short: shortDay, long: longDay } = zone.sunlight.solstice;
+
+    const getDayOfYear = (d) => {
+        const start = new Date(d.getFullYear(), 0, 0);
+        const diff = d.getTime() - start.getTime();
+        const oneDay = 1000 * 60 * 60 * 24;
+        return Math.floor(diff / oneDay);
+    };
+
+    const dayOfYear = getDayOfYear(date);
+    const daylightRange = longDay - shortDay;
+    const averageDaylight = (longDay + shortDay) / 2;
+    
+    // Corrected cosine wave for seasonal change, peaking at summer solstice (day 172)
+    // and at a low at winter solstice (day 355)
+    const daylightHours = averageDaylight + (daylightRange / 2) * Math.cos(((dayOfYear - 172) / 365.25) * 2 * Math.PI);
+
+    const sunriseDecimal = 12 - (daylightHours / 2);
+    const sunsetDecimal = 12 + (daylightHours / 2);
+
+    const decimalToDate = (decimal) => {
+        const d = new Date(date);
+        const hours = Math.floor(decimal);
+        const minutes = Math.round((decimal - hours) * 60);
+        d.setHours(hours, minutes, 0, 0);
+        return d;
+    };
+
+    const sunrise = decimalToDate(sunriseDecimal);
+    const sunset = decimalToDate(sunsetDecimal);
+    
+    // Define dawn and dusk as 30 mins before/after sunrise/sunset
+    const dawn = new Date(sunrise.getTime() - 30 * 60000);
+    const dusk = new Date(sunset.getTime() + 30 * 60000);
+
+    const now = date.getTime();
+    let state = 'NIGHT_AM';
+    if (now >= dawn.getTime() && now < sunrise.getTime()) state = 'DAWN';
+    else if (now >= sunrise.getTime() && now < sunset.getTime()) state = 'DAYLIGHT';
+    else if (now >= sunset.getTime() && now < dusk.getTime()) state = 'DUSK';
+    else if (now >= dusk.getTime()) state = 'NIGHT_PM';
+    
+    return { dawn, sunrise, sunset, dusk, state };
+};
+
 
 // --- From App.tsx ---
 
@@ -1258,6 +1421,8 @@ const App = () => {
   const [activeSaveId, setActiveSaveId] = useState(null);
 
   const isInitialLoad = useRef(true);
+  
+  const sunlightData = useMemo(() => calculateSunlight(currentDate, climateZone), [currentDate, climateZone]);
 
   // Helper function to calculate temperature based on a base temp and the hour.
   const updateTemperatureForHour = useCallback((weather, hour, zoneId, date) => {
@@ -1315,7 +1480,7 @@ const App = () => {
     
     const possibleWeatherTypes = monthlyData.weatherTypes.filter(type => {
         const potentialFinalTemp = Math.round(baseTemp + tempOffset + type.tempModifier);
-        // FIX: Cast `type` to `any` to allow accessing optional properties `minTemp` and `maxTemp` without a compile-time error.
+        // Fix: Cast `type` to `any` to allow accessing optional properties `minTemp` and `maxTemp`.
         const { minTemp, maxTemp } = type as any;
         if (minTemp !== undefined && potentialFinalTemp < minTemp) return false;
         if (maxTemp !== undefined && potentialFinalTemp > maxTemp) return false;
@@ -1337,7 +1502,7 @@ const App = () => {
         icon: selectedWeatherType.icon,
         baseTemp: baseTemp,
         date: date,
-        // FIX: Cast `selectedWeatherType` to `any` to allow accessing optional property `effects` without a compile-time error.
+        // Fix: Cast `selectedWeatherType` to `any` to allow accessing optional property `effects`.
         effects: (selectedWeatherType as any).effects,
     };
 
@@ -1631,7 +1796,7 @@ const App = () => {
 
             const possibleWeatherTypes = monthlyData.weatherTypes.filter(type => {
                 if (type.description === weatherStateForEvent.description) return false;
-                // FIX: Cast `type` to `any` to allow accessing optional properties `minTemp` and `maxTemp` without a compile-time error.
+                // Fix: Cast `type` to `any` to allow accessing optional properties `minTemp` and `maxTemp`.
                 const { minTemp, maxTemp } = type as any;
                 if (minTemp !== undefined && tempAtBoundary < minTemp) return false;
                 if (maxTemp !== undefined && tempAtBoundary > maxTemp) return false;
@@ -1659,7 +1824,7 @@ const App = () => {
                         baseTemp: newBaseTemp,
                         temperature: tempAtBoundary,
                         date: nextBoundary,
-                        // FIX: Cast `selectedWeatherType` to `any` to allow accessing optional property `effects` without a compile-time error.
+                        // Fix: Cast `selectedWeatherType` to `any` to allow accessing optional property `effects`.
                         effects: (selectedWeatherType as any).effects,
                     };
                     const effectText = formatEffects(newWeatherState.effects);
@@ -1697,7 +1862,8 @@ const App = () => {
       if (timeIterator.getTime() === endOfCurrentDay.getTime() && timeIterator < newDate) {
         const dayToArchive = {
           dateString: formatDateString(endOfCurrentDay),
-          events: !dayHasPassed ? [...events].sort((a,b) => b.id - a.id) : []
+          // FIX: Explicitly cast event IDs to numbers before sorting to prevent type errors.
+          events: !dayHasPassed ? [...events].sort((a, b) => Number(b.id) - Number(a.id)) : []
         };
         setArchivedDays(prev => [dayToArchive, ...prev]);
         
@@ -1790,7 +1956,6 @@ const App = () => {
         <Header 
           dateString={formatDateString(currentDate)} 
           timeString={formatTimeString(currentDate)}
-          hour={currentDate.getHours()}
           onReset={() => setIsResetModalOpen(true)}
           weather={currentWeather}
           climateZone={climateZone}
@@ -1798,10 +1963,13 @@ const App = () => {
           onOpenSetDateModal={() => setIsSetDateModalOpen(true)}
           activeSaveName={activeSave?.name || null}
           onOpenSaveManager={() => setIsSaveManagerOpen(true)}
+          sunlightData={sunlightData}
+          currentDate={currentDate}
+          formatTimeString={formatTimeString}
         />
         <main className="flex-grow container mx-auto p-4 flex flex-col lg:flex-row gap-8">
           <div className="lg:w-2/3 xl:w-3/4">
-            <Timeline events={events} archivedDays={archivedDays} currentDate={currentDate} />
+            <Timeline events={events} archivedDays={archivedDays} currentDate={currentDate} sunlightData={sunlightData} />
           </div>
           <div className="lg:w-1/3 xl:w-1/4">
             <WeatherLegend currentWeather={currentWeather} />
