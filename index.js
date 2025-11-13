@@ -337,11 +337,17 @@ const useTime = (initialDate) => {
   };
 };
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let ai;
+const getAi = () => {
+    if (!ai) {
+        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    }
+    return ai;
+}
 
 async function getSmartTimeSuggestion(prompt) {
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAi().models.generateContent({
       model: "gemini-2.5-flash",
       contents: `Du bist ein Assistent für einen Dungeons & Dragons Spielleiter. Deine Aufgabe ist es, die benötigte Zeit für eine Aktion der Heldengruppe zu schätzen und einen passenden, kurzen Log-Eintrag zu erstellen. Basierend auf der folgenden Nutzereingabe, erstelle ein JSON-Objekt mit 'duration_minutes' (eine Ganzzahl für die Gesamtzeit in Minuten) und 'log_entry' (eine beschreibende Zeichenkette für die Zeitleiste). Nutzereingabe: "${prompt}"`,
       config: {
