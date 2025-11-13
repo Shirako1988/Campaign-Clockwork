@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
-import { GoogleGenAI, Type } from "@google/genai";
 
 const SunIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", ...props },
   React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" })
@@ -336,49 +335,6 @@ const useTime = (initialDate) => {
     formatTimeString,
   };
 };
-
-let ai;
-const getAi = () => {
-    if (!ai) {
-        ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    }
-    return ai;
-}
-
-async function getSmartTimeSuggestion(prompt) {
-  try {
-    const response = await getAi().models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Du bist ein Assistent für einen Dungeons & Dragons Spielleiter. Deine Aufgabe ist es, die benötigte Zeit für eine Aktion der Heldengruppe zu schätzen und einen passenden, kurzen Log-Eintrag zu erstellen. Basierend auf der folgenden Nutzereingabe, erstelle ein JSON-Objekt mit 'duration_minutes' (eine Ganzzahl für die Gesamtzeit in Minuten) und 'log_entry' (eine beschreibende Zeichenkette für die Zeitleiste). Nutzereingabe: "${prompt}"`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            duration_minutes: {
-              type: Type.INTEGER,
-              description: "Die geschätzte Zeit in Minuten für die Aktion."
-            },
-            log_entry: {
-              type: Type.STRING,
-              description: "Eine kurze Beschreibung des Ereignisses für die Zeitleiste."
-            }
-          },
-          required: ["duration_minutes", "log_entry"]
-        }
-      }
-    });
-
-    const text = response.text.trim();
-    if (text) {
-      return JSON.parse(text);
-    }
-    return null;
-  } catch (error) {
-    console.error("Error calling Gemini API:", error);
-    throw new Error("Failed to get suggestion from Gemini API.");
-  }
-}
 
 const DailyTimelineVisualizer = ({ events, currentTime, sunlightData }) => {
     const totalMinutesInDay = 24 * 60;
