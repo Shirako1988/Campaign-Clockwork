@@ -1,6 +1,8 @@
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react';
 import ReactDOM from 'react-dom/client';
+
+/* --- ICONS --- */
 
 const SunIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", ...props },
   React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" })
@@ -72,6 +74,24 @@ const SunsetIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3
   React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M3.75 12h16.5m-16.5 3.75h16.5M5.25 6.75h13.5m-13.5 9H12m-6.75-9a2.25 2.25 0 002.25-2.25h9a2.25 2.25 0 002.25 2.25v.75" })
 );
 
+const CheckCircleIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", ...props },
+    React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" })
+);
+
+const ExclamationCircleIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", ...props },
+    React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" })
+);
+
+const CheckIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", ...props },
+  React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M4.5 12.75l6 6 9-13.5" })
+);
+
+const XMarkIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", ...props },
+  React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M6 18L18 6M6 6l12 12" })
+);
+
+/* --- CONSTANTS --- */
+
 const FANTASY_MONTHS = [
   "Frostmond", "Sturmmond", "Saatmond", "Ostermond", 
   "Wonnemond", "Brachmond", "Heumond", "Erntemond", 
@@ -105,43 +125,53 @@ const WEATHER_EFFECTS = {
   }
 };
 
-const WT_SUNNY = { type: 'sunny', description: 'Sonnig und klar', icon: SunIcon, weight: 0, tempModifier: 3 };
-const WT_CLOUDY = { type: 'cloudy', description: 'Leicht bewölkt', icon: CloudIcon, weight: 0, tempModifier: 0 };
-const WT_RAIN = { type: 'rain', description: 'Leichter Regen', icon: RainIcon, weight: 0, tempModifier: -2, minTemp: 1 };
-const WT_STORM = { type: 'storm', description: 'Gewittrig', icon: RainIcon, weight: 0, tempModifier: -4, minTemp: 5, effects: [WEATHER_EFFECTS.HEAVY_PRECIPITATION, WEATHER_EFFECTS.LIGHTLY_OBSCURED] };
-const WT_SNOW = { type: 'snow', description: 'Leichter Schneefall', icon: SnowIcon, weight: 0, tempModifier: -2, maxTemp: 2 };
-const WT_SLEET = { type: 'sleet', description: 'Eisregen', icon: RainIcon, weight: 0, tempModifier: -3, maxTemp: 1, effects: [WEATHER_EFFECTS.LIGHTLY_OBSCURED] };
-const WT_FOG = { type: 'fog', description: 'Dichter Nebel', icon: CloudIcon, weight: 0, tempModifier: -1, effects: [WEATHER_EFFECTS.HEAVILY_OBSCURED] };
-const WT_SCORCHING = { type: 'scorching', description: 'Sengende Hitze', icon: SunIcon, weight: 0, tempModifier: 5, minTemp: 35 };
-const WT_BLIZZARD = { type: 'blizzard', description: 'Schneesturm', icon: SnowIcon, weight: 0, tempModifier: -8, maxTemp: 0, effects: [WEATHER_EFFECTS.HEAVY_PRECIPITATION, WEATHER_EFFECTS.STRONG_WIND, WEATHER_EFFECTS.LIGHTLY_OBSCURED] };
-const WT_HUMID = { type: 'humid', description: 'Schwül und drückend', icon: CloudIcon, weight: 0, tempModifier: 0 };
-const WT_DOWNPOUR = { type: 'downpour', description: 'Tropischer Regenguss', icon: RainIcon, weight: 0, tempModifier: -3, minTemp: 15, effects: [WEATHER_EFFECTS.HEAVY_PRECIPITATION, WEATHER_EFFECTS.LIGHTLY_OBSCURED] };
-const WT_WINDY = { type: 'windy', description: 'Starke Windböen', icon: CloudIcon, weight: 0, tempModifier: -3, effects: [WEATHER_EFFECTS.STRONG_WIND] };
-const WT_SANDSTORM = { type: 'sandstorm', description: 'Sandsturm', icon: CloudIcon, weight: 0, tempModifier: -2, effects: [WEATHER_EFFECTS.STRONG_WIND, WEATHER_EFFECTS.LIGHTLY_OBSCURED]};
+// Tiers (Severity): 0=Clear, 1=Cloudy, 2=Precipitation, 3=Storm
+const WT_SUNNY = { type: 'sunny', description: 'Sonnig und klar', icon: SunIcon, weight: 0, tempModifier: 3, severity: 0, isCloudy: false };
+const WT_CLOUDY = { type: 'cloudy', description: 'Leicht bewölkt', icon: CloudIcon, weight: 0, tempModifier: 0, severity: 1, isCloudy: true };
+const WT_HUMID = { type: 'humid', description: 'Schwül und drückend', icon: CloudIcon, weight: 0, tempModifier: 1, severity: 1, isCloudy: true };
+const WT_FOG = { type: 'fog', description: 'Dichter Nebel', icon: CloudIcon, weight: 0, tempModifier: -1, severity: 1, isCloudy: true, effects: [WEATHER_EFFECTS.HEAVILY_OBSCURED] };
+const WT_MIST = { type: 'mist', description: 'Leichter Nebel', icon: CloudIcon, weight: 0, tempModifier: -1, severity: 1, isCloudy: true, effects: [WEATHER_EFFECTS.LIGHTLY_OBSCURED] };
 
+const WT_RAIN = { type: 'rain', description: 'Leichter Regen', icon: RainIcon, weight: 0, tempModifier: -2, minTemp: 1, severity: 2, isCloudy: true };
+const WT_SNOW = { type: 'snow', description: 'Leichter Schneefall', icon: SnowIcon, weight: 0, tempModifier: -2, maxTemp: 2, severity: 2, isCloudy: true };
+const WT_SLEET = { type: 'sleet', description: 'Eisregen', icon: RainIcon, weight: 0, tempModifier: -3, maxTemp: 1, severity: 2, isCloudy: true, effects: [WEATHER_EFFECTS.LIGHTLY_OBSCURED] };
+const WT_WINDY = { type: 'windy', description: 'Starke Windböen', icon: CloudIcon, weight: 0, tempModifier: -3, severity: 2, isCloudy: false, effects: [WEATHER_EFFECTS.STRONG_WIND] };
+
+const WT_STORM = { type: 'storm', description: 'Gewittrig', icon: RainIcon, weight: 0, tempModifier: -4, minTemp: 5, severity: 3, isCloudy: true, effects: [WEATHER_EFFECTS.HEAVY_PRECIPITATION, WEATHER_EFFECTS.LIGHTLY_OBSCURED] };
+const WT_SCORCHING = { type: 'scorching', description: 'Sengende Hitze', icon: SunIcon, weight: 0, tempModifier: 5, minTemp: 35, severity: 0, isCloudy: false };
+const WT_BLIZZARD = { type: 'blizzard', description: 'Schneesturm', icon: SnowIcon, weight: 0, tempModifier: -8, maxTemp: 0, severity: 3, isCloudy: true, effects: [WEATHER_EFFECTS.HEAVY_PRECIPITATION, WEATHER_EFFECTS.STRONG_WIND, WEATHER_EFFECTS.LIGHTLY_OBSCURED] };
+const WT_DOWNPOUR = { type: 'downpour', description: 'Tropischer Regenguss', icon: RainIcon, weight: 0, tempModifier: -3, minTemp: 15, severity: 3, isCloudy: true, effects: [WEATHER_EFFECTS.HEAVY_PRECIPITATION, WEATHER_EFFECTS.LIGHTLY_OBSCURED] };
+const WT_SANDSTORM = { type: 'sandstorm', description: 'Sandsturm', icon: CloudIcon, weight: 0, tempModifier: -2, severity: 3, isCloudy: true, effects: [WEATHER_EFFECTS.STRONG_WIND, WEATHER_EFFECTS.LIGHTLY_OBSCURED]};
+
+// Volatility: 1.0 = Normal. >1.0 = More frequent changes. <1.0 = More stable/longer duration.
+// DailyFluctuation: Amplitude of Day/Night cycle in degrees.
 const CLIMATE_ZONES = [
   {
     id: 'temperate',
     name: 'Gemäßigt',
+    volatility: 1.0,
+    dailyFluctuation: 10,
     sunlight: { solstice: { short: 9.5, long: 14.5 } },
     seasonalData: [
       { tempRange: [-5, 5], weatherTypes: [{...WT_CLOUDY, weight: 45}, {...WT_SNOW, weight: 30}, {...WT_SUNNY, description: 'Klare, kalte Sonne', weight: 15}, {...WT_SLEET, weight: 10}] }, // Jan
       { tempRange: [-4, 6], weatherTypes: [{...WT_CLOUDY, weight: 40}, {...WT_SNOW, weight: 30}, {...WT_RAIN, weight: 15}, {...WT_SUNNY, description: 'Klare, kalte Sonne', weight: 15}] }, // Feb
-      { tempRange: [-2, 10], weatherTypes: [{...WT_CLOUDY, weight: 40}, {...WT_RAIN, weight: 40}, {...WT_SUNNY, weight: 15}, {...WT_SNOW, weight: 5}] }, // Mar
+      { tempRange: [-2, 10], weatherTypes: [{...WT_CLOUDY, weight: 40}, {...WT_RAIN, weight: 35}, {...WT_SUNNY, weight: 15}, {...WT_MIST, weight: 5}, {...WT_SNOW, weight: 5}] }, // Mar
       { tempRange: [2, 15], weatherTypes: [{...WT_RAIN, weight: 45}, {...WT_CLOUDY, weight: 35}, {...WT_SUNNY, weight: 20}] }, // Apr
       { tempRange: [6, 18], weatherTypes: [{...WT_SUNNY, weight: 40}, {...WT_RAIN, weight: 30}, {...WT_CLOUDY, weight: 20}, {...WT_STORM, weight: 10}] }, // May
       { tempRange: [12, 24], weatherTypes: [{...WT_SUNNY, weight: 50}, {...WT_CLOUDY, weight: 30}, {...WT_RAIN, weight: 15}, {...WT_STORM, weight: 5}] }, // Jun
       { tempRange: [15, 28], weatherTypes: [{...WT_SUNNY, weight: 60}, {...WT_CLOUDY, weight: 20}, {...WT_STORM, weight: 15}, {...WT_RAIN, weight: 5}] }, // Jul
       { tempRange: [14, 27], weatherTypes: [{...WT_SUNNY, weight: 65}, {...WT_STORM, weight: 20}, {...WT_CLOUDY, weight: 15}] }, // Aug
-      { tempRange: [10, 21], weatherTypes: [{...WT_SUNNY, weight: 50}, {...WT_CLOUDY, weight: 30}, {...WT_RAIN, weight: 20}] }, // Sep
-      { tempRange: [5, 16], weatherTypes: [{...WT_CLOUDY, weight: 40}, {...WT_RAIN, weight: 35}, {...WT_SUNNY, weight: 20}, {...WT_FOG, weight: 5}] }, // Oct
-      { tempRange: [0, 10], weatherTypes: [{...WT_RAIN, weight: 45}, {...WT_CLOUDY, weight: 40}, {...WT_FOG, weight: 15}] }, // Nov
-      { tempRange: [-3, 7], weatherTypes: [{...WT_CLOUDY, weight: 50}, {...WT_RAIN, weight: 25}, {...WT_SNOW, weight: 15}, {...WT_FOG, weight: 10}] }, // Dec
+      { tempRange: [10, 21], weatherTypes: [{...WT_SUNNY, weight: 45}, {...WT_CLOUDY, weight: 30}, {...WT_RAIN, weight: 15}, {...WT_MIST, weight: 10}] }, // Sep
+      { tempRange: [5, 16], weatherTypes: [{...WT_CLOUDY, weight: 35}, {...WT_RAIN, weight: 30}, {...WT_SUNNY, weight: 20}, {...WT_MIST, weight: 10}, {...WT_FOG, weight: 5}] }, // Oct
+      { tempRange: [0, 10], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_CLOUDY, weight: 35}, {...WT_MIST, weight: 15}, {...WT_FOG, weight: 10}] }, // Nov
+      { tempRange: [-3, 7], weatherTypes: [{...WT_CLOUDY, weight: 45}, {...WT_RAIN, weight: 25}, {...WT_SNOW, weight: 15}, {...WT_MIST, weight: 5}, {...WT_FOG, weight: 10}] }, // Dec
     ]
   },
   {
     id: 'arctic',
     name: 'Arktis',
+    volatility: 0.8, // Weather stays for longer
+    dailyFluctuation: 5, // Low energy
     sunlight: { solstice: { short: 4, long: 20 } },
     seasonalData: [
       { tempRange: [-25, -15], weatherTypes: [{...WT_SNOW, weight: 50}, {...WT_BLIZZARD, weight: 30}, {...WT_CLOUDY, description: "Polarnacht", weight: 20}] },
@@ -161,6 +191,8 @@ const CLIMATE_ZONES = [
    {
     id: 'desert',
     name: 'Wüste',
+    volatility: 0.5, // Very stable weather (mostly sunny)
+    dailyFluctuation: 20, // Huge temp swing between day and night
     sunlight: { solstice: { short: 10.5, long: 13.5 } },
     seasonalData: [
       { tempRange: [5, 20], weatherTypes: [{...WT_SUNNY, description: "Klare, milde Sonne", weight: 80}, {...WT_WINDY, weight: 20}] },
@@ -180,6 +212,8 @@ const CLIMATE_ZONES = [
   {
     id: 'tropical',
     name: 'Tropen',
+    volatility: 1.5, // Frequent quick rains
+    dailyFluctuation: 8,
     sunlight: { solstice: { short: 11.5, long: 12.5 } },
     seasonalData: [
       { tempRange: [24, 33], weatherTypes: [{...WT_SUNNY, weight: 70}, {...WT_HUMID, weight: 25}, {...WT_RAIN, weight: 5}] },
@@ -199,6 +233,8 @@ const CLIMATE_ZONES = [
   {
     id: 'alpine',
     name: 'Gebirge',
+    volatility: 2.0, // Very chaotic
+    dailyFluctuation: 12,
     sunlight: { solstice: { short: 9, long: 15 } },
     seasonalData: [
       { tempRange: [-15, -2], weatherTypes: [{...WT_SNOW, weight: 50}, {...WT_BLIZZARD, weight: 30}, {...WT_CLOUDY, weight: 20}] },
@@ -209,8 +245,8 @@ const CLIMATE_ZONES = [
       { tempRange: [5, 18], weatherTypes: [{...WT_SUNNY, weight: 50}, {...WT_STORM, weight: 25}, {...WT_RAIN, weight: 25}] },
       { tempRange: [8, 20], weatherTypes: [{...WT_SUNNY, weight: 60}, {...WT_STORM, weight: 30}, {...WT_RAIN, weight: 10}] },
       { tempRange: [6, 19], weatherTypes: [{...WT_SUNNY, weight: 50}, {...WT_STORM, weight: 25}, {...WT_RAIN, weight: 15}, {...WT_WINDY, weight: 10}] },
-      { tempRange: [2, 14], weatherTypes: [{...WT_WINDY, weight: 35}, {...WT_RAIN, weight: 30}, {...WT_SUNNY, weight: 25}, {...WT_SNOW, weight: 10}] },
-      { tempRange: [-2, 10], weatherTypes: [{...WT_WINDY, weight: 40}, {...WT_RAIN, weight: 30}, {...WT_CLOUDY, weight: 20}, {...WT_SNOW, weight: 10}] },
+      { tempRange: [2, 14], weatherTypes: [{...WT_WINDY, weight: 35}, {...WT_RAIN, weight: 30}, {...WT_SUNNY, weight: 25}, {...WT_SNOW, weight: 10}, {...WT_MIST, weight: 5}] },
+      { tempRange: [-2, 10], weatherTypes: [{...WT_WINDY, weight: 40}, {...WT_RAIN, weight: 30}, {...WT_CLOUDY, weight: 20}, {...WT_SNOW, weight: 5}, {...WT_MIST, weight: 5}] },
       { tempRange: [-8, 4], weatherTypes: [{...WT_SNOW, weight: 50}, {...WT_WINDY, weight: 30}, {...WT_CLOUDY, weight: 20}] },
       { tempRange: [-12, 0], weatherTypes: [{...WT_BLIZZARD, weight: 40}, {...WT_SNOW, weight: 40}, {...WT_WINDY, weight: 20}] },
     ]
@@ -218,44 +254,50 @@ const CLIMATE_ZONES = [
   {
     id: 'coastal',
     name: 'Küste',
+    volatility: 1.0,
+    dailyFluctuation: 5, // Water stabilizes temp
     sunlight: { solstice: { short: 9.5, long: 14.5 } },
     seasonalData: [
-      { tempRange: [2, 10], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_STORM, weight: 30}, {...WT_FOG, weight: 20}, {...WT_CLOUDY, weight: 10}] },
-      { tempRange: [3, 11], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_CLOUDY, weight: 30}, {...WT_FOG, weight: 20}, {...WT_STORM, weight: 10}] },
-      { tempRange: [5, 14], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_SUNNY, weight: 30}, {...WT_FOG, weight: 20}, {...WT_CLOUDY, weight: 10}] },
-      { tempRange: [8, 16], weatherTypes: [{...WT_SUNNY, weight: 40}, {...WT_RAIN, weight: 30}, {...WT_FOG, weight: 15}, {...WT_CLOUDY, weight: 15}] },
-      { tempRange: [11, 19], weatherTypes: [{...WT_SUNNY, weight: 50}, {...WT_RAIN, weight: 20}, {...WT_CLOUDY, weight: 20}, {...WT_FOG, weight: 10}] },
-      { tempRange: [15, 25], weatherTypes: [{...WT_SUNNY, weight: 60}, {...WT_CLOUDY, weight: 20}, {...WT_RAIN, weight: 15}, {...WT_FOG, weight: 5}] },
-      { tempRange: [17, 27], weatherTypes: [{...WT_SUNNY, weight: 70}, {...WT_STORM, weight: 15}, {...WT_RAIN, weight: 10}, {...WT_CLOUDY, weight: 5}] },
-      { tempRange: [16, 26], weatherTypes: [{...WT_SUNNY, weight: 60}, {...WT_STORM, weight: 20}, {...WT_RAIN, weight: 20}] },
-      { tempRange: [13, 22], weatherTypes: [{...WT_SUNNY, weight: 40}, {...WT_RAIN, weight: 30}, {...WT_CLOUDY, weight: 30}] },
-      { tempRange: [10, 18], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_CLOUDY, weight: 30}, {...WT_STORM, weight: 20}, {...WT_FOG, weight: 10}] },
-      { tempRange: [6, 14], weatherTypes: [{...WT_RAIN, weight: 50}, {...WT_STORM, weight: 25}, {...WT_FOG, weight: 25}] },
-      { tempRange: [3, 11], weatherTypes: [{...WT_STORM, weight: 40}, {...WT_RAIN, weight: 40}, {...WT_FOG, weight: 20}] },
+      { tempRange: [2, 10], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_STORM, weight: 30}, {...WT_FOG, weight: 15}, {...WT_MIST, weight: 10}, {...WT_CLOUDY, weight: 5}] },
+      { tempRange: [3, 11], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_CLOUDY, weight: 30}, {...WT_FOG, weight: 15}, {...WT_MIST, weight: 10}, {...WT_STORM, weight: 5}] },
+      { tempRange: [5, 14], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_SUNNY, weight: 30}, {...WT_FOG, weight: 10}, {...WT_MIST, weight: 10}, {...WT_CLOUDY, weight: 10}] },
+      { tempRange: [8, 16], weatherTypes: [{...WT_SUNNY, weight: 40}, {...WT_RAIN, weight: 30}, {...WT_MIST, weight: 10}, {...WT_FOG, weight: 10}, {...WT_CLOUDY, weight: 10}] },
+      { tempRange: [11, 19], weatherTypes: [{...WT_SUNNY, weight: 50}, {...WT_RAIN, weight: 20}, {...WT_CLOUDY, weight: 20}, {...WT_MIST, weight: 10}] },
+      { tempRange: [15, 25], weatherTypes: [{...WT_SUNNY, weight: 60}, {...WT_CLOUDY, weight: 20}, {...WT_RAIN, weight: 15}, {...WT_MIST, weight: 5}] },
+      { tempRange: [17, 27], weatherTypes: [{...WT_SUNNY, weight: 70}, {...WT_STORM, weight: 15}, {...WT_RAIN, weight: 10}, {...WT_MIST, weight: 5}] },
+      { tempRange: [16, 26], weatherTypes: [{...WT_SUNNY, weight: 60}, {...WT_STORM, weight: 20}, {...WT_RAIN, weight: 15}, {...WT_MIST, weight: 5}] },
+      { tempRange: [13, 22], weatherTypes: [{...WT_SUNNY, weight: 40}, {...WT_RAIN, weight: 30}, {...WT_CLOUDY, weight: 20}, {...WT_MIST, weight: 10}] },
+      { tempRange: [10, 18], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_CLOUDY, weight: 30}, {...WT_STORM, weight: 20}, {...WT_MIST, weight: 10}] },
+      { tempRange: [6, 14], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_STORM, weight: 25}, {...WT_FOG, weight: 20}, {...WT_MIST, weight: 15}] },
+      { tempRange: [3, 11], weatherTypes: [{...WT_STORM, weight: 40}, {...WT_RAIN, weight: 30}, {...WT_FOG, weight: 20}, {...WT_MIST, weight: 10}] },
     ]
   },
     {
     id: 'swamp',
     name: 'Sumpfland',
+    volatility: 0.8, // Stagnant air
+    dailyFluctuation: 6,
     sunlight: { solstice: { short: 11, long: 13 } },
     seasonalData: [
-      { tempRange: [2, 12], weatherTypes: [{...WT_FOG, weight: 40}, {...WT_RAIN, description: "Kalter Nieselregen", weight: 30}, {...WT_CLOUDY, weight: 30}] },
-      { tempRange: [3, 13], weatherTypes: [{...WT_FOG, weight: 35}, {...WT_RAIN, weight: 35}, {...WT_CLOUDY, weight: 30}] },
-      { tempRange: [8, 18], weatherTypes: [{...WT_RAIN, weight: 50}, {...WT_HUMID, weight: 30}, {...WT_CLOUDY, weight: 20}] },
-      { tempRange: [12, 22], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_HUMID, weight: 40}, {...WT_STORM, weight: 20}] },
-      { tempRange: [16, 26], weatherTypes: [{...WT_HUMID, weight: 50}, {...WT_STORM, weight: 30}, {...WT_RAIN, weight: 20}] },
+      { tempRange: [2, 12], weatherTypes: [{...WT_FOG, weight: 30}, {...WT_MIST, weight: 20}, {...WT_RAIN, description: "Kalter Nieselregen", weight: 30}, {...WT_CLOUDY, weight: 20}] },
+      { tempRange: [3, 13], weatherTypes: [{...WT_FOG, weight: 25}, {...WT_MIST, weight: 20}, {...WT_RAIN, weight: 35}, {...WT_CLOUDY, weight: 20}] },
+      { tempRange: [8, 18], weatherTypes: [{...WT_RAIN, weight: 50}, {...WT_HUMID, weight: 25}, {...WT_MIST, weight: 15}, {...WT_CLOUDY, weight: 10}] },
+      { tempRange: [12, 22], weatherTypes: [{...WT_RAIN, weight: 40}, {...WT_HUMID, weight: 40}, {...WT_MIST, weight: 10}, {...WT_STORM, weight: 10}] },
+      { tempRange: [16, 26], weatherTypes: [{...WT_HUMID, weight: 50}, {...WT_STORM, weight: 30}, {...WT_RAIN, weight: 10}, {...WT_MIST, weight: 10}] },
       { tempRange: [22, 35], weatherTypes: [{...WT_HUMID, weight: 40}, {...WT_STORM, weight: 40}, {...WT_DOWNPOUR, weight: 20}] },
       { tempRange: [24, 36], weatherTypes: [{...WT_STORM, weight: 50}, {...WT_HUMID, weight: 30}, {...WT_DOWNPOUR, weight: 20}] },
       { tempRange: [23, 34], weatherTypes: [{...WT_HUMID, weight: 40}, {...WT_STORM, weight: 40}, {...WT_RAIN, weight: 20}] },
-      { tempRange: [18, 28], weatherTypes: [{...WT_HUMID, weight: 40}, {...WT_RAIN, weight: 40}, {...WT_FOG, weight: 20}] },
-      { tempRange: [12, 22], weatherTypes: [{...WT_RAIN, weight: 45}, {...WT_FOG, weight: 30}, {...WT_HUMID, weight: 25}] },
-      { tempRange: [6, 16], weatherTypes: [{...WT_FOG, weight: 50}, {...WT_RAIN, weight: 40}, {...WT_CLOUDY, weight: 10}] },
-      { tempRange: [3, 13], weatherTypes: [{...WT_FOG, weight: 45}, {...WT_RAIN, description: "Kalter Nieselregen", weight: 35}, {...WT_CLOUDY, weight: 20}] },
+      { tempRange: [18, 28], weatherTypes: [{...WT_HUMID, weight: 40}, {...WT_RAIN, weight: 40}, {...WT_FOG, weight: 10}, {...WT_MIST, weight: 10}] },
+      { tempRange: [12, 22], weatherTypes: [{...WT_RAIN, weight: 45}, {...WT_FOG, weight: 20}, {...WT_MIST, weight: 15}, {...WT_HUMID, weight: 20}] },
+      { tempRange: [6, 16], weatherTypes: [{...WT_FOG, weight: 35}, {...WT_MIST, weight: 25}, {...WT_RAIN, weight: 30}, {...WT_CLOUDY, weight: 10}] },
+      { tempRange: [3, 13], weatherTypes: [{...WT_FOG, weight: 35}, {...WT_MIST, weight: 25}, {...WT_RAIN, description: "Kalter Nieselregen", weight: 30}, {...WT_CLOUDY, weight: 10}] },
     ]
   },
   {
     id: 'scorching_wastes',
     name: 'Sengende Ödnis',
+    volatility: 0.5,
+    dailyFluctuation: 25,
     sunlight: { solstice: { short: 10.5, long: 13.5 } },
     seasonalData: [
       { tempRange: [30, 45], weatherTypes: [{...WT_SCORCHING, weight: 70}, {...WT_SANDSTORM, description: 'Heißer Sandsturm', weight: 30}] },
@@ -275,6 +317,8 @@ const CLIMATE_ZONES = [
   {
     id: 'frozen_wastes',
     name: 'Eiswüste',
+    volatility: 0.8,
+    dailyFluctuation: 15,
     sunlight: { solstice: { short: 0, long: 24 } },
     seasonalData: [
       { tempRange: [-60, -50], weatherTypes: [{...WT_BLIZZARD, weight: 70}, {...WT_SNOW, weight: 20}, {...WT_FOG, description: 'Gefrierender Nebel', weight: 10}] },
@@ -292,6 +336,306 @@ const CLIMATE_ZONES = [
     ]
   },
 ];
+
+/* --- UTILS --- */
+
+const calculateSunlight = (date, climateZoneId) => {
+    const zone = CLIMATE_ZONES.find(z => z.id === climateZoneId) || CLIMATE_ZONES[0];
+    const { short: shortDay, long: longDay } = zone.sunlight.solstice;
+
+    const getDayOfYear = (d) => {
+        const start = new Date(d.getFullYear(), 0, 0);
+        const diff = d.getTime() - start.getTime();
+        const oneDay = 1000 * 60 * 60 * 24;
+        return Math.floor(diff / oneDay);
+    };
+
+    const dayOfYear = getDayOfYear(date);
+    const daylightRange = longDay - shortDay;
+    const averageDaylight = (longDay + shortDay) / 2;
+    
+    const daylightHours = averageDaylight + (daylightRange / 2) * Math.cos(((dayOfYear - 172) / 365.25) * 2 * Math.PI);
+
+    const sunriseDecimal = 12 - (daylightHours / 2);
+    const sunsetDecimal = 12 + (daylightHours / 2);
+
+    const decimalToDate = (decimal) => {
+        const d = new Date(date);
+        const hours = Math.floor(decimal);
+        const minutes = Math.round((decimal - hours) * 60);
+        d.setHours(hours, minutes, 0, 0);
+        return d;
+    };
+
+    const sunrise = decimalToDate(sunriseDecimal);
+    const sunset = decimalToDate(sunsetDecimal);
+    
+    const dawn = new Date(sunrise.getTime() - 30 * 60000);
+    const dusk = new Date(sunset.getTime() + 30 * 60000);
+
+    const now = date.getTime();
+    let state = 'NIGHT_AM';
+    if (now >= dawn.getTime() && now < sunrise.getTime()) state = 'DAWN';
+    else if (now >= sunrise.getTime() && now < sunset.getTime()) state = 'DAYLIGHT';
+    else if (now >= sunset.getTime() && now < dusk.getTime()) state = 'DUSK';
+    else if (now >= dusk.getTime()) state = 'NIGHT_PM';
+    
+    return { dawn, sunrise, sunset, dusk, state };
+};
+
+const updateTemperatureForHour = (weather, hour, zoneId, date) => {
+  if (typeof weather.baseTemp === 'undefined') {
+    return weather;
+  }
+  
+  const zone = CLIMATE_ZONES.find(z => z.id === zoneId) || CLIMATE_ZONES[0];
+  const baseFluctuation = zone.dailyFluctuation || 10;
+
+  // --- CLOUD PHYSICS & INSULATION ---
+  // Clouds dampen the temperature swing (cooler days, warmer nights).
+  // Instead of adding a flat value, we scale the amplitude.
+  const isCloudy = ['cloudy', 'rain', 'storm', 'snow', 'fog', 'mist', 'blizzard', 'downpour', 'sleet', 'sandstorm'].includes(weather.type);
+  const isSevere = ['storm', 'blizzard', 'downpour', 'sandstorm'].includes(weather.type);
+  
+  let damping = 1.0;
+  if (isSevere) damping = 0.25;      // Storms have very little diurnal variation
+  else if (isCloudy) damping = 0.5;  // Clouds reduce variation by half
+  
+  const effectiveAmplitude = baseFluctuation * damping;
+
+  // --- SMOOTH DIURNAL CURVE ---
+  const sunlight = calculateSunlight(date, zoneId);
+  const sunriseHour = sunlight.sunrise.getHours() + sunlight.sunrise.getMinutes()/60;
+  const sunsetHour = sunlight.sunset.getHours() + sunlight.sunset.getMinutes()/60;
+  const currentDecimalHour = hour + (date.getMinutes() / 60);
+  
+  let diurnalOffset = 0;
+  
+  // We define a continuous curve f(t) for the day:
+  // t=Sunrise: -1.0 (Minimum)
+  // t=Peak:    +1.0 (Maximum)
+  // t=Sunset:   0.0 (Neutral)
+  // t=Sunrise: -1.0 (Back to Minimum)
+  
+  if (currentDecimalHour >= sunriseHour && currentDecimalHour < sunsetHour) {
+      // DAYTIME
+      const dayLength = sunsetHour - sunriseHour;
+      const timeSinceSunrise = currentDecimalHour - sunriseHour;
+      const progress = timeSinceSunrise / dayLength; // 0.0 -> 1.0
+      
+      // Peak happens at 70% of the day (afternoon)
+      const peakPoint = 0.7;
+      
+      if (progress < peakPoint) {
+          // Phase 1: Rise from -1 to +1
+          // Map progress (0..0.7) to angle (0..PI)
+          // -cos(angle) goes -1 -> 1
+          const segmentProgress = progress / peakPoint;
+          diurnalOffset = -Math.cos(segmentProgress * Math.PI);
+      } else {
+          // Phase 2: Fall from +1 to 0
+          // Map progress (0.7..1.0) to angle (0..PI/2)
+          // cos(angle) goes 1 -> 0
+          const segmentProgress = (progress - peakPoint) / (1 - peakPoint);
+          diurnalOffset = Math.cos(segmentProgress * (Math.PI / 2));
+      }
+  } else {
+      // NIGHTTIME
+      // Decay from 0 to -1
+      let timeSinceSunset;
+      if (currentDecimalHour >= sunsetHour) {
+          timeSinceSunset = currentDecimalHour - sunsetHour;
+      } else {
+          timeSinceSunset = (currentDecimalHour + 24) - sunsetHour;
+      }
+      
+      const nightLength = 24 - (sunsetHour - sunriseHour);
+      const progress = timeSinceSunset / nightLength; // 0.0 -> 1.0
+      
+      // Map progress (0..1) to angle (0..PI/2)
+      // -sin(angle) goes 0 -> -1
+      diurnalOffset = -Math.sin(progress * (Math.PI / 2));
+  }
+  
+  // Apply amplitude
+  const tempChange = effectiveAmplitude * diurnalOffset;
+
+  // Fixed modifier from weather type (e.g. Rain is generally colder than Sun)
+  const weatherTypeFixedMod = (() => {
+      const m = zone.seasonalData[date.getMonth()].weatherTypes.find(t => t.description === weather.description);
+      return m ? m.tempModifier : 0;
+  })();
+
+  const trendMod = weather.trendTemp || 0;
+
+  // The 'baseTemp' represents the daily average (roughly at sunset).
+  // The diurnal curve swings around this based on the amplitude.
+  const finalTemp = Math.round(weather.baseTemp + tempChange + weatherTypeFixedMod + trendMod);
+
+  return { ...weather, temperature: finalTemp };
+};
+
+const generateNewWeather = (zoneId, date, previousDayFinalWeather, startHour = 0) => {
+  const zone = CLIMATE_ZONES.find(z => z.id === zoneId) || CLIMATE_ZONES[0];
+  const monthIndex = date.getMonth();
+  const monthlyData = zone.seasonalData[monthIndex];
+  const [minTempRange, maxTempRange] = monthlyData.tempRange;
+  
+  // Volatility controls how long weather lasts
+  const volatility = zone.volatility || 1.0;
+
+  let selectedWeatherType;
+  let baseTemp;
+  let trendTemp = 0;
+  let trendDuration = 0;
+
+  if (previousDayFinalWeather) {
+      // --- TREND SYSTEM (Weather Fronts) ---
+      // Carry over existing trend
+      if (previousDayFinalWeather.trendDuration > 0) {
+          trendTemp = previousDayFinalWeather.trendTemp;
+          trendDuration = previousDayFinalWeather.trendDuration;
+      } else {
+          // Chance to start a new front (Heatwave or Cold Snap)
+          // 10% chance per generation cycle
+          if (Math.random() < 0.10) {
+              const isHeatwave = Math.random() > 0.5;
+              const magnitude = Math.floor(Math.random() * 6) + 4; // 4 to 9 degrees
+              trendTemp = isHeatwave ? magnitude : -magnitude;
+              trendDuration = Math.floor(Math.random() * 72) + 24; // 1-3 days
+          }
+      }
+
+      // --- CONTINUITY & TRANSITION SYSTEM (Markov Chain) ---
+      const prevBase = previousDayFinalWeather.baseTemp;
+      const prevSeverity = previousDayFinalWeather.severity ?? 0; // Default to 0 if not present
+
+      // 1. Find logical neighbors based on Severity Tier
+      // You can only move +/- 1 Tier, or stay same.
+      // Tier 0: Clear, 1: Cloudy, 2: Rain/Wind, 3: Storm
+      
+      const validWeatherTypes = monthlyData.weatherTypes.filter(type => {
+          const typeSeverity = type.severity ?? 0;
+          
+          // High volatility zones (mountains) can jump 2 tiers
+          const maxJump = volatility > 1.5 ? 2 : 1;
+          
+          if (Math.abs(typeSeverity - prevSeverity) > maxJump) {
+              return false; 
+          }
+
+          // Also ensure temp plausibility (prevent loops)
+          const prevTypeMod = monthlyData.weatherTypes.find(t => t.description === previousDayFinalWeather.description)?.tempModifier || 0;
+          const predictedBase = prevBase + prevTypeMod - type.tempModifier;
+          return predictedBase >= (minTempRange - 10) && predictedBase <= (maxTempRange + 10);
+      });
+
+      const listToUse = validWeatherTypes.length > 0 ? validWeatherTypes : monthlyData.weatherTypes;
+      
+      // Weighted Selection
+      const totalWeight = listToUse.reduce((sum, type) => sum + type.weight, 0);
+      let random = Math.random() * totalWeight;
+      selectedWeatherType = listToUse.find(type => {
+        random -= type.weight;
+        return random < 0;
+      }) || listToUse[0];
+
+      // 2. Calculate New Base Temp
+      // Standard continuity equation
+      let prevModifier = monthlyData.weatherTypes.find(t => t.description === previousDayFinalWeather.description)?.tempModifier || 0;
+      let rawNewBase = prevBase + prevModifier - selectedWeatherType.tempModifier;
+      
+      // 3. Drift Correction
+      const seasonalMean = (minTempRange + maxTempRange) / 2;
+      const driftCorrection = (seasonalMean - rawNewBase) * 0.1; 
+      
+      baseTemp = rawNewBase + driftCorrection;
+
+  } else {
+      // INITIAL GENERATION
+      baseTemp = Math.random() * (maxTempRange - minTempRange) + minTempRange;
+      
+      // Initial selection purely weighted
+      const totalWeight = monthlyData.weatherTypes.reduce((sum, type) => sum + type.weight, 0);
+      let random = Math.random() * totalWeight;
+      selectedWeatherType = monthlyData.weatherTypes.find(type => {
+        random -= type.weight;
+        return random < 0;
+      }) || monthlyData.weatherTypes[0];
+  }
+
+  // Duration modified by volatility
+  // Base 2-6 hours. 
+  // High volatility (2.0) -> 1-3 hours. 
+  // Low volatility (0.5) -> 4-12 hours.
+  const baseDuration = Math.floor(Math.random() * 5) + 2;
+  const adjustedDuration = Math.max(1, Math.round(baseDuration / volatility));
+
+  const initialWeather = {
+      type: selectedWeatherType.type,
+      description: selectedWeatherType.description,
+      icon: selectedWeatherType.icon,
+      baseTemp: baseTemp,
+      date: date,
+      effects: selectedWeatherType.effects,
+      severity: selectedWeatherType.severity ?? 0, // Store severity for next cycle
+      trendTemp: trendTemp, // Store trend
+      trendDuration: trendDuration, // Store trend remaining time
+      nextChangeHour: startHour + adjustedDuration 
+  };
+
+  return updateTemperatureForHour(initialWeather, date.getHours(), zoneId, date);
+};
+
+/* --- TOAST SYSTEM --- */
+
+const ToastContext = React.createContext();
+
+const ToastProvider = ({ children }) => {
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = useCallback((message, type = 'success') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  return React.createElement(ToastContext.Provider, { value: { addToast } },
+    children,
+    React.createElement("div", { className: "fixed top-24 right-4 z-[100] flex flex-col gap-2 pointer-events-none" },
+      toasts.map(toast => 
+        React.createElement("div", { 
+            key: toast.id, 
+            className: `
+                pointer-events-auto
+                transform transition-all duration-500 ease-in-out 
+                ${toast.type === 'error' ? 'bg-red-900/90 border-red-500' : 'bg-stone-800/90 border-amber-500'} 
+                border text-amber-50 px-4 py-3 rounded shadow-lg flex items-center gap-3 min-w-[300px] animate-slideIn
+            `,
+            onClick: () => removeToast(toast.id)
+        },
+          toast.type === 'error' 
+            ? React.createElement(ExclamationCircleIcon, { className: "w-6 h-6 text-red-400" })
+            : React.createElement(CheckCircleIcon, { className: "w-6 h-6 text-green-400" }),
+          React.createElement("div", null,
+            React.createElement("p", { className: "font-bold text-sm" }, toast.type === 'error' ? 'Fehler' : 'Erfolg'),
+            React.createElement("p", { className: "text-sm" }, toast.message)
+          )
+        )
+      )
+    )
+  );
+};
+
+const useToast = () => useContext(ToastContext);
+
+/* --- HOOKS --- */
 
 const useTime = (initialDate) => {
   const [currentDate, setCurrentDate] = useState(initialDate);
@@ -335,6 +679,180 @@ const useTime = (initialDate) => {
     formatTimeString,
   };
 };
+
+const usePersistence = (currentDate, events, archivedDays, climateZone, currentWeather, loadStateFromSaveCallback) => {
+    const [saveSlots, setSaveSlots] = useState([]);
+    const [activeSaveId, setActiveSaveId] = useState(null);
+    const isInitialLoad = useRef(true);
+    const { addToast } = useToast();
+
+    // Load initial data
+    useEffect(() => {
+        try {
+          const savedSlotsRaw = localStorage.getItem('dnd_campaign_saves');
+          const savedActiveId = localStorage.getItem('dnd_campaign_active_save_id');
+          
+          let allSlots = [];
+          if (savedSlotsRaw) {
+            allSlots = JSON.parse(savedSlotsRaw);
+          }
+    
+          if (allSlots.length === 0) {
+            const initialDate = new Date('1489-01-01T08:00:00');
+            const initialClimate = 'temperate';
+            const initialWeather = generateNewWeather(initialClimate, initialDate);
+            const newSave = {
+              id: Date.now().toString(),
+              name: "Meine erste Kampagne",
+              lastModified: Date.now(),
+              state: {
+                currentDate: initialDate.toISOString(),
+                events: [],
+                archivedDays: [],
+                climateZone: initialClimate,
+                currentWeather: initialWeather
+              }
+            };
+            allSlots = [newSave];
+            setActiveSaveId(newSave.id);
+            loadStateFromSaveCallback(newSave);
+          } else {
+            const activeId = savedActiveId ? JSON.parse(savedActiveId) : allSlots[0].id;
+            setActiveSaveId(activeId);
+            const activeSave = allSlots.find(s => s.id === activeId) || allSlots[0];
+            loadStateFromSaveCallback(activeSave);
+          }
+          
+          setSaveSlots(allSlots);
+        } catch (error) {
+          console.error("Failed to load state from localStorage", error);
+          addToast("Fehler beim Laden der Spielstände", "error");
+        }
+    }, []); // Empty dependency array to run only on mount
+
+    // Auto-save effect
+    useEffect(() => {
+        if (isInitialLoad.current) {
+            isInitialLoad.current = false;
+            return;
+        }
+          
+        if (!activeSaveId || !currentWeather) {
+            return;
+        }
+    
+        const currentState = {
+          currentDate: currentDate.toISOString(),
+          events,
+          archivedDays,
+          climateZone,
+          currentWeather
+        };
+        
+        const updatedSlots = saveSlots.map(slot => 
+          slot.id === activeSaveId 
+            ? { ...slot, state: currentState, lastModified: Date.now() } 
+            : slot
+        );
+    
+        try {
+          localStorage.setItem('dnd_campaign_saves', JSON.stringify(updatedSlots));
+          localStorage.setItem('dnd_campaign_active_save_id', JSON.stringify(activeSaveId));
+          setSaveSlots(updatedSlots); // Ensure state is in sync
+        } catch (error) {
+          console.error("Failed to save state to localStorage", error);
+          addToast("Fehler beim automatischen Speichern", "error");
+        }
+    }, [currentDate, events, archivedDays, climateZone, currentWeather, activeSaveId]); // Ensure all dependencies are present
+
+    const handleNewSave = () => {
+        if (!currentWeather) return;
+        const newSave = {
+          id: Date.now().toString(),
+          name: `Neuer Spielstand ${new Date().toLocaleDateString('de-DE')}`,
+          lastModified: Date.now(),
+          state: {
+            currentDate: currentDate.toISOString(),
+            events,
+            archivedDays,
+            climateZone,
+            currentWeather,
+          },
+        };
+        const newSlots = [...saveSlots, newSave];
+        setSaveSlots(newSlots);
+        setActiveSaveId(newSave.id);
+        localStorage.setItem('dnd_campaign_saves', JSON.stringify(newSlots));
+        addToast("Neuer Spielstand erstellt");
+    };
+
+    const handleRenameSave = (saveId, newName) => {
+        const newSlots = saveSlots.map(s => s.id === saveId ? { ...s, name: newName, lastModified: Date.now() } : s);
+        setSaveSlots(newSlots);
+        localStorage.setItem('dnd_campaign_saves', JSON.stringify(newSlots));
+        addToast("Spielstand umbenannt");
+    };
+
+    const handleDuplicateSave = (saveId) => {
+        const saveToDuplicate = saveSlots.find(s => s.id === saveId);
+        if (saveToDuplicate) {
+          const newSave = {
+            ...saveToDuplicate,
+            id: Date.now().toString(),
+            name: `${saveToDuplicate.name} (Kopie)`,
+            lastModified: Date.now(),
+          };
+          const newSlots = [...saveSlots, newSave];
+          setSaveSlots(newSlots);
+          localStorage.setItem('dnd_campaign_saves', JSON.stringify(newSlots));
+          addToast("Spielstand dupliziert");
+        }
+    };
+
+    const handleDeleteSave = (saveId) => {
+        let newSlots = saveSlots.filter(s => s.id !== saveId);
+        
+        if (newSlots.length === 0) {
+          const initialDate = new Date('1489-01-01T08:00:00');
+          const newDefaultSave = {
+            id: Date.now().toString(),
+            name: "Meine erste Kampagne",
+            lastModified: Date.now(),
+            state: {
+              currentDate: initialDate.toISOString(),
+              events: [],
+              archivedDays: [],
+              climateZone: 'temperate',
+              currentWeather: generateNewWeather('temperate', initialDate)
+            }
+          };
+          newSlots = [newDefaultSave];
+          setActiveSaveId(newDefaultSave.id);
+          loadStateFromSaveCallback(newDefaultSave);
+        } else if (activeSaveId === saveId) {
+          const newActiveSave = newSlots[0];
+          setActiveSaveId(newActiveSave.id);
+          loadStateFromSaveCallback(newActiveSave);
+        }
+        
+        setSaveSlots(newSlots);
+        localStorage.setItem('dnd_campaign_saves', JSON.stringify(newSlots));
+        addToast("Spielstand gelöscht");
+    };
+
+    return {
+        saveSlots,
+        activeSaveId,
+        setActiveSaveId,
+        handleNewSave,
+        handleRenameSave,
+        handleDuplicateSave,
+        handleDeleteSave,
+        setSaveSlots // Exposed for import functionality
+    };
+};
+
+/* --- COMPONENTS --- */
 
 const DailyTimelineVisualizer = ({ events, currentTime, sunlightData }) => {
     const totalMinutesInDay = 24 * 60;
@@ -694,7 +1212,7 @@ const SaveSlotItem = ({ slot, isActive, onLoad, onRename, onDuplicate, onDelete,
             React.createElement("button", { onClick: () => setIsEditing(true), title: "Umbenennen", className: "p-2 text-stone-400 hover:text-amber-300 transition-colors" }, React.createElement(EditIcon, { className: "w-5 h-5" })),
             React.createElement("button", { onClick: () => onDuplicate(slot.id), title: "Duplizieren", className: "p-2 text-stone-400 hover:text-amber-300 transition-colors" }, React.createElement(CopyIcon, { className: "w-5 h-5" })),
             React.createElement("button", { onClick: () => onExport(slot.id), title: "Exportieren", className: "p-2 text-stone-400 hover:text-amber-300 transition-colors" }, React.createElement(ExportIcon, { className: "w-5 h-5" })),
-            React.createElement("button", { onClick: () => onDelete(slot), title: "Löschen", className: "p-2 text-stone-400 hover:text-red-500 transition-colors", disabled: isActive }, React.createElement(TrashIcon, { className: "w-5 h-5" }))
+            React.createElement("button", { onClick: () => onDelete(slot.id), title: "Löschen", className: "p-2 text-stone-400 hover:text-red-500 transition-colors", disabled: isActive }, React.createElement(TrashIcon, { className: "w-5 h-5" }))
         )
     );
 };
@@ -900,8 +1418,16 @@ const StatusIndicator = ({ label, isActive, color = 'amber' }) => {
 
 const TimeControls = ({ onAddEvent, onOpenDowntimeModal }) => {
   const [description, setDescription] = useState('');
-  const [hours, setHours] = useState('');
-  const [minutes, setMinutes] = useState('');
+  const [hours, setHours] = useState('0');
+  const [minutes, setMinutes] = useState('0');
+  const [sliderValue, setSliderValue] = useState(0);
+
+  const handleSliderChange = (e) => {
+    const val = parseInt(e.target.value);
+    setSliderValue(val);
+    setHours(Math.floor(val / 60).toString());
+    setMinutes((val % 60).toString());
+  };
 
   const handleManualSubmit = (e) => {
     e.preventDefault();
@@ -909,8 +1435,9 @@ const TimeControls = ({ onAddEvent, onOpenDowntimeModal }) => {
     if (description && totalMinutes > 0) {
       onAddEvent(description, totalMinutes);
       setDescription('');
-      setHours('');
-      setMinutes('');
+      setHours('0');
+      setMinutes('0');
+      setSliderValue(0);
     }
   };
   
@@ -918,39 +1445,63 @@ const TimeControls = ({ onAddEvent, onOpenDowntimeModal }) => {
     onAddEvent(desc, mins);
   }
 
+  // Update slider when inputs change manually
+  useEffect(() => {
+    const total = (parseInt(hours || '0') * 60) + parseInt(minutes || '0');
+    if (total <= 480) {
+        setSliderValue(total);
+    }
+  }, [hours, minutes]);
+
   return React.createElement("div", { className: "sticky bottom-0 left-0 right-0 z-10 bg-stone-900 bg-opacity-80 backdrop-blur-lg border-t-2 border-amber-800 p-4 shadow-[0_-4px_15px_rgba(0,0,0,0.5)]" },
     React.createElement("div", { className: "container mx-auto space-y-4" },
-      React.createElement("form", { onSubmit: handleManualSubmit, className: "space-y-2" },
-        React.createElement("label", { htmlFor: "description", className: "font-bold text-amber-300" }, "Manueller Eintrag"),
-        React.createElement("div", { className: "flex flex-col sm:flex-row gap-2" },
-          React.createElement("input", {
-            id: "description",
-            type: "text",
-            value: description,
-            onChange: (e) => setDescription(e.target.value),
-            placeholder: "Ereignisbeschreibung",
-            className: "flex-grow bg-stone-700 text-amber-50 placeholder-stone-400 border border-stone-600 rounded-md p-2 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-          }),
-          React.createElement("div", { className: "flex gap-2" },
+      React.createElement("form", { onSubmit: handleManualSubmit, className: "space-y-3" },
+        React.createElement("div", { className: "flex flex-col sm:flex-row gap-3 items-stretch sm:items-end" },
             React.createElement("input", {
-              type: "number",
-              value: hours,
-              onChange: (e) => setHours(e.target.value),
-              placeholder: "Std",
-              min: "0",
-              className: "w-16 bg-stone-700 text-amber-50 placeholder-stone-400 border border-stone-600 rounded-md p-2 text-center focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                id: "description",
+                type: "text",
+                value: description,
+                onChange: (e) => setDescription(e.target.value),
+                placeholder: "Ereignisbeschreibung",
+                className: "flex-grow w-full bg-stone-700 text-amber-50 placeholder-stone-400 border border-stone-600 rounded-md p-2 h-10 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
             }),
-            React.createElement("input", {
-              type: "number",
-              value: minutes,
-              onChange: (e) => setMinutes(e.target.value),
-              placeholder: "Min",
-              min: "0",
-              max: "59",
-              className: "w-16 bg-stone-700 text-amber-50 placeholder-stone-400 border border-stone-600 rounded-md p-2 text-center focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-            })
-          ),
-          React.createElement("button", { type: "submit", className: "bg-stone-600 text-amber-200 font-bold px-4 py-2 rounded-md hover:bg-stone-500 transition-colors" }, "Hinzufügen")
+            React.createElement("div", { className: "flex gap-2 items-end" },
+                React.createElement("div", { className: "flex flex-col items-center" },
+                    React.createElement("label", { className: "text-[10px] text-stone-400 uppercase" }, "Std"),
+                    React.createElement("input", {
+                        type: "number",
+                        value: hours,
+                        onChange: (e) => setHours(e.target.value),
+                        min: "0",
+                        className: "w-14 bg-stone-700 text-amber-50 placeholder-stone-400 border border-stone-600 rounded-md p-2 h-10 text-center focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                    }),
+                ),
+                React.createElement("div", { className: "flex flex-col items-center" },
+                    React.createElement("label", { className: "text-[10px] text-stone-400 uppercase" }, "Min"),
+                    React.createElement("input", {
+                        type: "number",
+                        value: minutes,
+                        onChange: (e) => setMinutes(e.target.value),
+                        min: "0",
+                        max: "59",
+                        className: "w-14 bg-stone-700 text-amber-50 placeholder-stone-400 border border-stone-600 rounded-md p-2 h-10 text-center focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+                    }),
+                ),
+                React.createElement("button", { type: "submit", className: "h-10 mt-auto bg-stone-600 text-amber-200 font-bold px-4 rounded-md hover:bg-stone-500 transition-colors" }, "Hinzufügen")
+            )
+        ),
+        React.createElement("div", { className: "flex items-center gap-4 px-1" },
+            React.createElement("span", { className: "text-xs text-stone-400 font-mono w-8" }, "5m"),
+            React.createElement("input", { 
+                type: "range", 
+                min: "0", 
+                max: "480", 
+                step: "5", 
+                value: sliderValue, 
+                onChange: handleSliderChange,
+                className: "w-full h-2 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+            }),
+            React.createElement("span", { className: "text-xs text-stone-400 font-mono w-8" }, "8h")
         )
       ),
       React.createElement("div", { className: "flex flex-wrap gap-2 justify-center items-center pt-2" },
@@ -967,19 +1518,50 @@ const TimeControls = ({ onAddEvent, onOpenDowntimeModal }) => {
   );
 };
 
-const TimelineItem = ({ event, isFirst = false }) => {
+const TimelineItem = ({ event, isFirst = false, onEdit, onDelete }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedText, setEditedText] = useState(event.description);
+
+    const handleSave = () => {
+        onEdit(event.id, editedText);
+        setIsEditing(false);
+    };
+
     return React.createElement("div", { className: "relative pl-8 sm:pl-12 py-4 group" },
         React.createElement("div", { className: `absolute left-0 h-full w-0.5 ${isFirst ? 'bg-amber-400' : 'bg-amber-700'} group-hover:bg-amber-300 transition-colors duration-300` }),
         React.createElement("div", { className: `absolute left-[-9px] top-[22px] w-5 h-5 rounded-full ${isFirst ? 'bg-amber-300 ring-4 ring-amber-400' : 'bg-amber-600'} group-hover:bg-amber-300 transition-colors duration-300` }),
-        React.createElement("p", { className: `font-bold text-lg ${isFirst ? 'text-amber-200' : 'text-amber-400'}` },
-            `${event.time} - ${event.endTime} Uhr`,
-            React.createElement("span", { className: "text-sm font-normal text-amber-500 ml-2" }, `(${event.duration} min)`)
+        
+        React.createElement("div", { className: "flex justify-between items-start group-hover:translate-x-1 transition-transform duration-200" },
+             React.createElement("p", { className: `font-bold text-lg ${isFirst ? 'text-amber-200' : 'text-amber-400'}` },
+                `${event.time} - ${event.endTime} Uhr`,
+                React.createElement("span", { className: "text-sm font-normal text-amber-500 ml-2" }, `(${event.duration} min)`)
+            ),
+            React.createElement("div", { className: "flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200" },
+                !isEditing && React.createElement("button", { onClick: () => setIsEditing(true), className: "text-stone-400 hover:text-amber-300 p-1" }, React.createElement(EditIcon, { className: "w-4 h-4" })),
+                React.createElement("button", { onClick: () => onDelete(event.id), className: "text-stone-400 hover:text-red-400 p-1" }, React.createElement(TrashIcon, { className: "w-4 h-4" }))
+            )
         ),
-        React.createElement("p", { className: "text-amber-100 whitespace-pre-wrap" }, event.description)
+        
+        isEditing ? 
+            React.createElement("div", { className: "mt-2" },
+                React.createElement("textarea", {
+                    value: editedText,
+                    onChange: (e) => setEditedText(e.target.value),
+                    className: "w-full bg-stone-900 text-amber-100 border border-amber-700 rounded p-2 min-h-[100px] focus:ring-2 focus:ring-amber-500 outline-none"
+                }),
+                React.createElement("div", { className: "flex gap-2 mt-2 justify-end" },
+                     React.createElement("button", { onClick: () => setIsEditing(false), className: "text-sm text-stone-400 hover:text-amber-200" }, "Abbrechen"),
+                     React.createElement("button", { onClick: handleSave, className: "text-sm bg-amber-700 hover:bg-amber-600 text-amber-100 px-3 py-1 rounded flex items-center gap-1" }, 
+                        React.createElement(CheckIcon, { className: "w-3 h-3" }), "Speichern"
+                     )
+                )
+            )
+        :
+            React.createElement("p", { className: "text-amber-100 whitespace-pre-wrap" }, event.description)
     );
 };
 
-const Timeline = ({ events, archivedDays, currentDate, sunlightData }) => {
+const Timeline = ({ events, archivedDays, currentDate, sunlightData, onEditEvent, onDeleteEvent }) => {
   if (events.length === 0 && archivedDays.length === 0) {
     return React.createElement("div", { className: "h-full flex items-center justify-center bg-stone-800 bg-opacity-70 rounded-lg p-8" },
       React.createElement("div", { className: "text-center" },
@@ -1013,7 +1595,13 @@ const Timeline = ({ events, archivedDays, currentDate, sunlightData }) => {
     React.createElement("h2", { className: "font-medieval text-2xl text-amber-300 mb-2 sticky top-0 bg-stone-800/95 py-2 z-10 border-b border-amber-900" }, "Aktueller Tag"),
     React.createElement(DailyTimelineVisualizer, { events: events, currentTime: currentDate, sunlightData: sunlightData }),
     events.length > 0 ?
-      events.map((event, index) => React.createElement(TimelineItem, { key: event.id, event: event, isFirst: index === 0 }))
+      events.map((event, index) => React.createElement(TimelineItem, { 
+          key: event.id, 
+          event: event, 
+          isFirst: index === 0,
+          onEdit: onEditEvent,
+          onDelete: onDeleteEvent
+      }))
       :
       React.createElement("p", { className: "text-amber-400 italic py-4 pl-8" }, "Noch keine Ereignisse für heute. Die Zeit für neue Abenteuer!"),
     archivedDays.length > 0 &&
@@ -1041,7 +1629,13 @@ const Timeline = ({ events, archivedDays, currentDate, sunlightData }) => {
                         ),
                         React.createElement("div", { className: "border-l-2 border-stone-600 ml-3 pl-2 pt-2" },
                           day.events.length > 0 ?
-                            day.events.map(event => React.createElement(TimelineItem, { key: event.id, event: event }))
+                            day.events.map(event => React.createElement(TimelineItem, { 
+                                key: event.id, 
+                                event: event,
+                                // Archivierte Events sind momentan schreibgeschützt um Logik-Fehler zu vermeiden
+                                onEdit: () => {}, 
+                                onDelete: () => {}
+                            }))
                             :
                             React.createElement("p", { className: "text-amber-500 italic py-2 pl-8 sm:pl-12" }, "Keine besonderen Ereignisse an diesem Tag.")
                         )
@@ -1095,51 +1689,7 @@ const WeatherLegend = ({ currentWeather }) => {
   );
 };
 
-const calculateSunlight = (date, climateZoneId) => {
-    const zone = CLIMATE_ZONES.find(z => z.id === climateZoneId) || CLIMATE_ZONES[0];
-    const { short: shortDay, long: longDay } = zone.sunlight.solstice;
-
-    const getDayOfYear = (d) => {
-        const start = new Date(d.getFullYear(), 0, 0);
-        const diff = d.getTime() - start.getTime();
-        const oneDay = 1000 * 60 * 60 * 24;
-        return Math.floor(diff / oneDay);
-    };
-
-    const dayOfYear = getDayOfYear(date);
-    const daylightRange = longDay - shortDay;
-    const averageDaylight = (longDay + shortDay) / 2;
-    
-    const daylightHours = averageDaylight + (daylightRange / 2) * Math.cos(((dayOfYear - 172) / 365.25) * 2 * Math.PI);
-
-    const sunriseDecimal = 12 - (daylightHours / 2);
-    const sunsetDecimal = 12 + (daylightHours / 2);
-
-    const decimalToDate = (decimal) => {
-        const d = new Date(date);
-        const hours = Math.floor(decimal);
-        const minutes = Math.round((decimal - hours) * 60);
-        d.setHours(hours, minutes, 0, 0);
-        return d;
-    };
-
-    const sunrise = decimalToDate(sunriseDecimal);
-    const sunset = decimalToDate(sunsetDecimal);
-    
-    const dawn = new Date(sunrise.getTime() - 30 * 60000);
-    const dusk = new Date(sunset.getTime() + 30 * 60000);
-
-    const now = date.getTime();
-    let state = 'NIGHT_AM';
-    if (now >= dawn.getTime() && now < sunrise.getTime()) state = 'DAWN';
-    else if (now >= sunrise.getTime() && now < sunset.getTime()) state = 'DAYLIGHT';
-    else if (now >= sunset.getTime() && now < dusk.getTime()) state = 'DUSK';
-    else if (now >= dusk.getTime()) state = 'NIGHT_PM';
-    
-    return { dawn, sunrise, sunset, dusk, state };
-};
-
-const App = () => {
+const AppContent = () => {
   const {
     currentDate,
     setCurrentDate,
@@ -1159,95 +1709,10 @@ const App = () => {
   const [climateZone, setClimateZone] = useState('temperate');
   const [currentWeather, setCurrentWeather] = useState(null);
 
-  const [saveSlots, setSaveSlots] = useState([]);
-  const [activeSaveId, setActiveSaveId] = useState(null);
+  const { addToast } = useToast();
 
-  const isInitialLoad = useRef(true);
-  
-  const sunlightData = useMemo(() => calculateSunlight(currentDate, climateZone), [currentDate, climateZone]);
-
-  const updateTemperatureForHour = useCallback((weather, hour, zoneId, date) => {
-    if (typeof weather.baseTemp === 'undefined') {
-      return weather;
-    }
-    
-    const zone = CLIMATE_ZONES.find(z => z.id === zoneId) || CLIMATE_ZONES[0];
-    const monthIndex = date.getMonth();
-    const monthlyData = zone.seasonalData[monthIndex];
-
-    let tempModifier = 0;
-    const foundType = monthlyData.weatherTypes.find(wt => wt.description === weather.description);
-    if (foundType) {
-      tempModifier = foundType.tempModifier;
-    }
-  
-    const tempFluctuation = 5;
-    const tempOffset = tempFluctuation * Math.sin((hour - 8) * (Math.PI / 12));
-    
-    const finalTemp = Math.round(weather.baseTemp + tempOffset + tempModifier);
-  
-    return { ...weather, temperature: finalTemp };
-  }, []);
-
-  const generateNewWeather = useCallback((zoneId, date, previousDayFinalWeather) => {
-    const zone = CLIMATE_ZONES.find(z => z.id === zoneId) || CLIMATE_ZONES[0];
-    const monthIndex = date.getMonth();
-    const monthlyData = zone.seasonalData[monthIndex];
-
-    let baseTemp;
-    const [minTempRange, maxTempRange] = monthlyData.tempRange;
-
-    if (previousDayFinalWeather) {
-        const endOfDayTemp = previousDayFinalWeather.temperature;
-        const tempFluctuation = 5;
-        
-        const zone = CLIMATE_ZONES.find(z => z.id === zoneId) || CLIMATE_ZONES[0];
-        const oldWeatherType = zone.seasonalData[previousDayFinalWeather.date.getMonth()]?.weatherTypes.find(wt => wt.description === previousDayFinalWeather.description);
-        const oldTempModifier = oldWeatherType?.tempModifier || 0;
-        
-        const tempOffsetAtMidnight = tempFluctuation * Math.sin((0 - 8) * (Math.PI / 12));
-
-        const calculatedBaseTemp = endOfDayTemp - tempOffsetAtMidnight - oldTempModifier;
-        const drift = (Math.random() * 4) - 2;
-        const driftedBaseTemp = calculatedBaseTemp + drift;
-        baseTemp = Math.max(minTempRange, Math.min(maxTempRange, driftedBaseTemp));
-    } else {
-        baseTemp = Math.random() * (maxTempRange - minTempRange) + minTempRange;
-    }
-
-    const tempFluctuation = 5;
-    const tempOffset = tempFluctuation * Math.sin((date.getHours() - 8) * (Math.PI / 12));
-    
-    const possibleWeatherTypes = monthlyData.weatherTypes.filter(type => {
-        const potentialFinalTemp = Math.round(baseTemp + tempOffset + type.tempModifier);
-        const { minTemp, maxTemp } = type;
-        if (minTemp !== undefined && potentialFinalTemp < minTemp) return false;
-        if (maxTemp !== undefined && potentialFinalTemp > maxTemp) return false;
-        return true;
-    });
-    
-    const listToUse = possibleWeatherTypes.length > 0 ? possibleWeatherTypes : monthlyData.weatherTypes;
-    
-    const totalWeight = listToUse.reduce((sum, type) => sum + type.weight, 0);
-    let random = Math.random() * totalWeight;
-    const selectedWeatherType = listToUse.find(type => {
-      random -= type.weight;
-      return random < 0;
-    }) || listToUse[0];
-
-    const initialWeather = {
-        type: selectedWeatherType.type,
-        description: selectedWeatherType.description,
-        icon: selectedWeatherType.icon,
-        baseTemp: baseTemp,
-        date: date,
-        effects: selectedWeatherType.effects,
-    };
-
-    return updateTemperatureForHour(initialWeather, date.getHours(), zoneId, date);
-  }, [updateTemperatureForHour]);
-
-  const loadStateFromSave = (saveSlot) => {
+  // Callback for loading state, passed to usePersistence
+  const loadStateFromSave = useCallback((saveSlot) => {
     if (!saveSlot) return;
     const state = saveSlot.state;
     setCurrentDate(new Date(state.currentDate));
@@ -1263,82 +1728,21 @@ const App = () => {
     } else {
        setCurrentWeather(generateNewWeather(state.climateZone, new Date(state.currentDate)));
     }
-  };
+    addToast("Spielstand geladen");
+  }, [setCurrentDate, addToast]);
 
-  useEffect(() => {
-    try {
-      const savedSlotsRaw = localStorage.getItem('dnd_campaign_saves');
-      const savedActiveId = localStorage.getItem('dnd_campaign_active_save_id');
-      
-      let allSlots = [];
-      if (savedSlotsRaw) {
-        allSlots = JSON.parse(savedSlotsRaw);
-      }
-
-      if (allSlots.length === 0) {
-        const initialDate = new Date('1489-01-01T08:00:00');
-        const initialClimate = 'temperate';
-        const initialWeather = generateNewWeather(initialClimate, initialDate);
-        const newSave = {
-          id: Date.now().toString(),
-          name: "Meine erste Kampagne",
-          lastModified: Date.now(),
-          state: {
-            currentDate: initialDate.toISOString(),
-            events: [],
-            archivedDays: [],
-            climateZone: initialClimate,
-            currentWeather: initialWeather
-          }
-        };
-        allSlots = [newSave];
-        setActiveSaveId(newSave.id);
-        loadStateFromSave(newSave);
-      } else {
-        const activeId = savedActiveId ? JSON.parse(savedActiveId) : allSlots[0].id;
-        setActiveSaveId(activeId);
-        const activeSave = allSlots.find(s => s.id === activeId) || allSlots[0];
-        loadStateFromSave(activeSave);
-      }
-      
-      setSaveSlots(allSlots);
-    } catch (error) {
-      console.error("Failed to load state from localStorage", error);
-    }
-  }, [generateNewWeather, setCurrentDate]);
-
-  useEffect(() => {
-    if (isInitialLoad.current) {
-        isInitialLoad.current = false;
-        return;
-    }
-      
-    if (!activeSaveId || !currentWeather) {
-        return;
-    }
-
-    const currentState = {
-      currentDate: currentDate.toISOString(),
-      events,
-      archivedDays,
-      climateZone,
-      currentWeather
-    };
-    
-    const updatedSlots = saveSlots.map(slot => 
-      slot.id === activeSaveId 
-        ? { ...slot, state: currentState, lastModified: Date.now() } 
-        : slot
-    );
-
-    try {
-      localStorage.setItem('dnd_campaign_saves', JSON.stringify(updatedSlots));
-      localStorage.setItem('dnd_campaign_active_save_id', JSON.stringify(activeSaveId));
-    } catch (error) {
-      console.error("Failed to save state to localStorage", error);
-    }
-  }, [currentDate, events, archivedDays, climateZone, currentWeather, activeSaveId]);
-
+  const {
+    saveSlots,
+    activeSaveId,
+    setActiveSaveId,
+    handleNewSave,
+    handleRenameSave,
+    handleDuplicateSave,
+    handleDeleteSave,
+    setSaveSlots
+  } = usePersistence(currentDate, events, archivedDays, climateZone, currentWeather, loadStateFromSave);
+  
+  const sunlightData = useMemo(() => calculateSunlight(currentDate, climateZone), [currentDate, climateZone]);
 
   const handleLoadSave = (saveId) => {
     const saveToLoad = saveSlots.find(s => s.id === saveId);
@@ -1349,81 +1753,15 @@ const App = () => {
     }
   };
   
-  const handleNewSave = () => {
-    if (!currentWeather) return;
-    const newSave = {
-      id: Date.now().toString(),
-      name: `Neuer Spielstand ${new Date().toLocaleDateString('de-DE')}`,
-      lastModified: Date.now(),
-      state: {
-        currentDate: currentDate.toISOString(),
-        events,
-        archivedDays,
-        climateZone,
-        currentWeather,
-      },
-    };
-    const newSlots = [...saveSlots, newSave];
-    setSaveSlots(newSlots);
-    setActiveSaveId(newSave.id);
-    localStorage.setItem('dnd_campaign_saves', JSON.stringify(newSlots));
-  };
-  
-  const handleRenameSave = (saveId, newName) => {
-    const newSlots = saveSlots.map(s => s.id === saveId ? { ...s, name: newName, lastModified: Date.now() } : s);
-    setSaveSlots(newSlots);
-    localStorage.setItem('dnd_campaign_saves', JSON.stringify(newSlots));
-  };
-  
-  const handleDuplicateSave = (saveId) => {
-    const saveToDuplicate = saveSlots.find(s => s.id === saveId);
-    if (saveToDuplicate) {
-      const newSave = {
-        ...saveToDuplicate,
-        id: Date.now().toString(),
-        name: `${saveToDuplicate.name} (Kopie)`,
-        lastModified: Date.now(),
-      };
-      const newSlots = [...saveSlots, newSave];
-      setSaveSlots(newSlots);
-      localStorage.setItem('dnd_campaign_saves', JSON.stringify(newSlots));
-    }
-  };
-  
   const openDeleteModal = (saveSlot) => {
     setSaveToDelete(saveSlot);
     setIsDeleteSaveModalOpen(true);
   };
   
   const handleConfirmDeleteSave = () => {
-    if (!saveToDelete) return;
-    let newSlots = saveSlots.filter(s => s.id !== saveToDelete.id);
-    
-    if (newSlots.length === 0) {
-      const initialDate = new Date('1489-01-01T08:00:00');
-      const newDefaultSave = {
-        id: Date.now().toString(),
-        name: "Meine erste Kampagne",
-        lastModified: Date.now(),
-        state: {
-          currentDate: initialDate.toISOString(),
-          events: [],
-          archivedDays: [],
-          climateZone: 'temperate',
-          currentWeather: generateNewWeather('temperate', initialDate)
-        }
-      };
-      newSlots = [newDefaultSave];
-      setActiveSaveId(newDefaultSave.id);
-      loadStateFromSave(newDefaultSave);
-    } else if (activeSaveId === saveToDelete.id) {
-      const newActiveSave = newSlots[0];
-      setActiveSaveId(newActiveSave.id);
-      loadStateFromSave(newActiveSave);
+    if (saveToDelete) {
+        handleDeleteSave(saveToDelete.id);
     }
-    
-    setSaveSlots(newSlots);
-    localStorage.setItem('dnd_campaign_saves', JSON.stringify(newSlots));
     setIsDeleteSaveModalOpen(false);
     setSaveToDelete(null);
   };
@@ -1438,6 +1776,7 @@ const App = () => {
         linkElement.setAttribute('href', dataUri);
         linkElement.setAttribute('download', exportFileDefaultName);
         linkElement.click();
+        addToast("Spielstand exportiert");
     }
   };
 
@@ -1457,13 +1796,14 @@ const App = () => {
                       const newSlots = [...saveSlots, importedSave];
                       setSaveSlots(newSlots);
                       localStorage.setItem('dnd_campaign_saves', JSON.stringify(newSlots));
+                      addToast("Spielstand erfolgreich importiert");
                   } else {
-                      alert("Fehler: Die importierte Datei scheint kein gültiger Spielstand zu sein.");
+                      addToast("Fehler: Ungültiges Dateiformat", "error");
                   }
               }
           } catch (e) {
               console.error("Error parsing imported file", e);
-              alert("Fehler beim Lesen der Datei. Ist es eine gültige JSON-Datei?");
+              addToast("Fehler beim Lesen der Datei", "error");
           }
       };
       reader.readAsText(file);
@@ -1473,10 +1813,21 @@ const App = () => {
     setClimateZone(zoneId);
     const newWeather = generateNewWeather(zoneId, currentDate);
     setCurrentWeather(newWeather);
+    addToast("Klimazone geändert");
   };
 
   const formatEffects = (effects) => {
     return '';
+  };
+  
+  const handleUpdateEvent = (id, newDescription) => {
+      setEvents(prev => prev.map(e => e.id === id ? { ...e, description: newDescription } : e));
+      addToast("Ereignis aktualisiert");
+  };
+
+  const handleDeleteEvent = (id) => {
+      setEvents(prev => prev.filter(e => e.id !== id));
+      addToast("Ereignis gelöscht");
   };
 
   const handleAddEvent = useCallback((description, minutes) => {
@@ -1486,6 +1837,11 @@ const App = () => {
     const newDate = new Date(oldDate.getTime() + minutes * 60 * 1000);
 
     let weatherStateForEvent = { ...currentWeather };
+    // Initialize nextChangeHour if it doesn't exist (backward compatibility)
+    if (typeof weatherStateForEvent.nextChangeHour === 'undefined') {
+        weatherStateForEvent.nextChangeHour = weatherStateForEvent.date.getHours() + (Math.floor(Math.random() * 4) + 2);
+    }
+    
     const weatherDescriptions = [];
     let timeIterator = new Date(oldDate.getTime());
     let dayHasPassed = false;
@@ -1500,52 +1856,46 @@ const App = () => {
       endOfCurrentDay.setHours(23, 59, 59, 999);
       const endOfThisChunk = newDate < endOfCurrentDay ? newDate : endOfCurrentDay;
       let weatherTime = new Date(timeIterator.getTime());
+      
       while (weatherTime < endOfThisChunk) {
-        const weatherCheckThreshold = 4;
-        const nextBoundary = new Date(weatherTime.getTime());
-        const hoursUntilNextBoundary = weatherCheckThreshold - (nextBoundary.getHours() % weatherCheckThreshold);
-        nextBoundary.setHours(nextBoundary.getHours() + hoursUntilNextBoundary, 0, 0, 0);
+        // Determine the next time the weather logic needs to check for changes
+        // We check at the top of every hour to update temperature, but only change TYPE at nextChangeHour
+        const currentHour = weatherTime.getHours();
+        
+        // Handle Trend Expiration
+        if (weatherStateForEvent.trendDuration > 0) {
+             weatherStateForEvent.trendDuration -= 1;
+             if (weatherStateForEvent.trendDuration <= 0) {
+                 weatherStateForEvent.trendTemp = 0;
+                 // We don't log "Trend expired" to reduce noise, but it will reflect in temp
+             }
+        }
+
+        let nextBoundary = new Date(weatherTime.getTime());
+        
+        // Advance to next hour
+        nextBoundary.setHours(currentHour + 1, 0, 0, 0);
+        
+        // Check if we hit the randomized weather change time
+        const isWeatherChangeTime = nextBoundary.getHours() >= weatherStateForEvent.nextChangeHour;
+        
         const effectiveEndDate = nextBoundary > endOfThisChunk ? endOfThisChunk : nextBoundary;
-        if (effectiveEndDate.getTime() === nextBoundary.getTime() && weatherTime.getHours() !== nextBoundary.getHours()) {
+
+        if (effectiveEndDate.getTime() === nextBoundary.getTime() && isWeatherChangeTime) {
             const tempStateAtBoundaryOldWeather = updateTemperatureForHour(weatherStateForEvent, nextBoundary.getHours(), climateZone, nextBoundary);
             const tempAtBoundary = tempStateAtBoundaryOldWeather.temperature;
-            const zone = CLIMATE_ZONES.find(z => z.id === climateZone) || CLIMATE_ZONES[0];
-            const monthIndex = nextBoundary.getMonth();
-            const monthlyData = zone.seasonalData[monthIndex];
-            const possibleWeatherTypes = monthlyData.weatherTypes.filter(type => {
-                if (type.description === weatherStateForEvent.description) return false;
-                const { minTemp, maxTemp } = type;
-                if (minTemp !== undefined && tempAtBoundary < minTemp) return false;
-                if (maxTemp !== undefined && tempAtBoundary > maxTemp) return false;
-                return true;
-            });
-            if (possibleWeatherTypes.length > 0) {
-                const totalWeight = possibleWeatherTypes.reduce((sum, type) => sum + type.weight, 0);
-                let random = Math.random() * totalWeight;
-                const selectedWeatherType = possibleWeatherTypes.find(type => {
-                    random -= type.weight;
-                    return random < 0;
-                }) || possibleWeatherTypes[0];
-
-                if (selectedWeatherType) {
-                    const tempFluctuation = 5;
-                    const newTempModifier = selectedWeatherType.tempModifier;
-                    const tempOffsetAtBoundary = tempFluctuation * Math.sin((nextBoundary.getHours() - 8) * (Math.PI / 12));
-                    const newBaseTemp = tempAtBoundary - tempOffsetAtBoundary - newTempModifier;
-
-                    const newWeatherState = {
-                        type: selectedWeatherType.type,
-                        description: selectedWeatherType.description,
-                        icon: selectedWeatherType.icon,
-                        baseTemp: newBaseTemp,
-                        temperature: tempAtBoundary,
-                        date: nextBoundary,
-                        effects: selectedWeatherType.effects,
-                    };
-                    const effectText = formatEffects(newWeatherState.effects);
-                    weatherDescriptions.push(`Das Wetter schlägt um: ${newWeatherState.description} bei ${newWeatherState.temperature}°C.${effectText}`);
-                    weatherStateForEvent = newWeatherState;
-                }
+            
+            // Use generation logic to find new weather type based on continuity
+            const nextWeatherStateRaw = generateNewWeather(climateZone, nextBoundary, weatherStateForEvent, nextBoundary.getHours());
+            
+            if (nextWeatherStateRaw.description !== weatherStateForEvent.description) {
+                 const effectText = formatEffects(nextWeatherStateRaw.effects);
+                 weatherDescriptions.push(`Das Wetter schlägt um: ${nextWeatherStateRaw.description} bei ${nextWeatherStateRaw.temperature}°C.${effectText}`);
+                 weatherStateForEvent = nextWeatherStateRaw;
+            } else {
+                 // Weather type stayed the same, but extend the duration
+                 weatherStateForEvent = nextWeatherStateRaw;
+                 // If temp changed significantly due to new random base, maybe log it? (Skipping for now to reduce noise)
             }
         }
 
@@ -1589,8 +1939,8 @@ const App = () => {
         const midnight = new Date(timeIterator);
         midnight.setHours(24, 0, 0, 0);
         
-        weatherStateForEvent = generateNewWeather(climateZone, midnight, endOfDayWeather);
-        weatherDescriptions.push(`Ein neuer Tag bricht an. Das Wetter: ${weatherStateForEvent.description} bei ${weatherStateForEvent.temperature}°C.`);
+        // Generate new day's weather based on end of previous day
+        weatherStateForEvent = generateNewWeather(climateZone, midnight, endOfDayWeather, 0);
         
         dayHasPassed = true;
         timeIterator = midnight;
@@ -1617,7 +1967,8 @@ const App = () => {
     }
 
     setCurrentDate(newDate);
-  }, [currentDate, events, climateZone, currentWeather, formatTimeString, formatDateString, setCurrentDate, generateNewWeather, updateTemperatureForHour]);
+    addToast("Zeit vorangeschritten");
+  }, [currentDate, events, climateZone, currentWeather, formatTimeString, formatDateString, setCurrentDate, addToast]);
   
   const handleConfirmReset = () => {
     localStorage.removeItem('dnd_campaign_saves');
@@ -1641,6 +1992,7 @@ const App = () => {
     const newDate = new Date(year, month, day, hour, minute, 0, 0);
     if (isNaN(newDate.getTime())) {
         console.error("Invalid date created from inputs");
+        addToast("Ungültiges Datum", "error");
         return;
     }
     setCurrentDate(newDate);
@@ -1648,6 +2000,7 @@ const App = () => {
     const newWeather = generateNewWeather(climateZone, newDate);
     setCurrentWeather(newWeather);
     setIsSetDateModalOpen(false);
+    addToast("Datum manuell gesetzt");
   };
 
   if (!currentWeather) {
@@ -1674,7 +2027,14 @@ const App = () => {
       }),
       React.createElement("main", { className: "flex-grow container mx-auto p-4 flex flex-col lg:flex-row gap-8" },
         React.createElement("div", { className: "lg:w-2/3 xl:w-3/4" },
-          React.createElement(Timeline, { events: events, archivedDays: archivedDays, currentDate: currentDate, sunlightData: sunlightData })
+          React.createElement(Timeline, { 
+              events: events, 
+              archivedDays: archivedDays, 
+              currentDate: currentDate, 
+              sunlightData: sunlightData,
+              onEditEvent: handleUpdateEvent,
+              onDeleteEvent: handleDeleteEvent
+          })
         ),
         React.createElement("div", { className: "lg:w-1/3 xl:w-1/4" },
           React.createElement(WeatherLegend, { currentWeather: currentWeather })
@@ -1718,6 +2078,12 @@ const App = () => {
       })
     )
   );
+};
+
+const App = () => {
+    return React.createElement(ToastProvider, null,
+        React.createElement(AppContent, null)
+    );
 };
 
 const rootElement = document.getElementById('root');
