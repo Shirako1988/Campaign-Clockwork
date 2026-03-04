@@ -554,7 +554,7 @@ const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
 
   const addToast = useCallback((message, type = 'success') => {
-    const id = Date.now();
+    const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
@@ -841,7 +841,7 @@ const DailyTimelineVisualizer = ({ events, currentTime, sunlightData }) => {
             React.createElement("div", { className: "absolute top-0 bottom-0 h-full bg-blue-900/40", style: { left: `${duskEndPercent}%`, right: '0' }, title: "Nacht" }),
 
             sortedEvents.map(event => {
-                const startDate = new Date(event.id);
+                const startDate = new Date(parseInt(event.id));
                 const displayDay = new Date(currentTime);
                 displayDay.setHours(0, 0, 0, 0);
                 const displayDayStartMs = displayDay.getTime();
@@ -1577,7 +1577,7 @@ const Timeline = ({ events, archivedDays, currentDate, sunlightData, onEditEvent
     React.createElement(DailyTimelineVisualizer, { events: events, currentTime: currentDate, sunlightData: sunlightData }),
     events.length > 0 ?
       events.map((event, index) => React.createElement(TimelineItem, { 
-          key: event.id, 
+          key: event.id + '-' + index, 
           event: event, 
           isFirst: index === 0,
           onEdit: onEditEvent,
@@ -1634,8 +1634,8 @@ const Timeline = ({ events, archivedDays, currentDate, sunlightData, onEditEvent
                         ),
                         React.createElement("div", { className: "border-l-2 border-stone-600 ml-3 pl-2 pt-2" },
                           day.events.length > 0 ?
-                            day.events.map(event => React.createElement(TimelineItem, { 
-                                key: event.id, 
+                            day.events.map((event, index) => React.createElement(TimelineItem, { 
+                                key: event.id + '-' + index, 
                                 event: event,
                                 onEdit: () => {}, 
                                 onDelete: () => {}
@@ -2137,7 +2137,7 @@ const AppContent = () => {
       }
 
       const newEvent = {
-          id: Date.now().toString(),
+          id: Date.now().toString() + '-' + Math.random().toString(36).substring(2, 9),
           name,
           description,
           createdDate: currentDate.toISOString(), // Keep track when it was created (start of progress bar)
@@ -2261,7 +2261,7 @@ const AppContent = () => {
     const finalDescription = [description, ...weatherDescriptions].join('\n\n').trim();
 
     const newUserEvent = {
-      id: oldDate.getTime(),
+      id: oldDate.getTime() + '-' + Math.random().toString(36).substring(2, 9),
       time: formatTimeString(oldDate),
       endTime: formatTimeString(newDate),
       description: finalDescription,
