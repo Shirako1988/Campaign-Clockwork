@@ -1529,6 +1529,8 @@ const TimelineItem = ({ event, isFirst = false, onEdit, onDelete }) => {
 };
 
 const Timeline = ({ events, archivedDays, currentDate, sunlightData, onEditEvent, onDeleteEvent }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+
   if (events.length === 0 && archivedDays.length === 0) {
     return React.createElement("div", { className: "h-full flex items-center justify-center bg-stone-800 bg-opacity-70 rounded-lg p-8" },
       React.createElement("div", { className: "text-center" },
@@ -1541,6 +1543,17 @@ const Timeline = ({ events, archivedDays, currentDate, sunlightData, onEditEvent
   const groupArchivedDays = () => {
     const grouped = {};
     archivedDays.forEach(day => {
+      // Filter logic
+      const searchLower = searchTerm.toLowerCase();
+      const matchesSearch = !searchTerm || 
+        day.dateString.toLowerCase().includes(searchLower) ||
+        day.events.some(event => 
+          event.description.toLowerCase().includes(searchLower) || 
+          event.time.toLowerCase().includes(searchLower)
+        );
+
+      if (!matchesSearch) return;
+
       const parts = day.dateString.split(', ');
       if (parts.length < 2) return;
       const year = parts[1];
@@ -1553,6 +1566,7 @@ const Timeline = ({ events, archivedDays, currentDate, sunlightData, onEditEvent
   };
 
   const groupedArchive = groupArchivedDays();
+  const hasSearchResults = Object.keys(groupedArchive).length > 0;
   
   const icon = (className) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", className: className },
       React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M8.25 4.5l7.5 7.5-7.5 7.5" })
@@ -1573,23 +1587,47 @@ const Timeline = ({ events, archivedDays, currentDate, sunlightData, onEditEvent
       React.createElement("p", { className: "text-amber-400 italic py-4 pl-8" }, "Noch keine Ereignisse für heute. Die Zeit für neue Abenteuer!"),
     archivedDays.length > 0 &&
       React.createElement(React.Fragment, null,
-        React.createElement("h2", { className: "font-medieval text-2xl text-amber-300 mt-8 mb-4 pt-4 border-t border-amber-900" }, "Archiv"),
+        React.createElement("div", { className: "mt-8 mb-4 pt-4 border-t border-amber-900 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" },
+            React.createElement("h2", { className: "font-medieval text-2xl text-amber-300" }, "Archiv"),
+            React.createElement("div", { className: "relative w-full sm:w-64" },
+                React.createElement("input", {
+                    type: "text",
+                    placeholder: "Archiv durchsuchen...",
+                    value: searchTerm,
+                    onChange: (e) => setSearchTerm(e.target.value),
+                    className: "w-full bg-stone-900 text-amber-100 border border-stone-600 rounded-md py-1.5 pl-8 pr-3 text-sm focus:ring-1 focus:ring-amber-500 outline-none"
+                }),
+                React.createElement("svg", { 
+                    xmlns: "http://www.w3.org/2000/svg", 
+                    fill: "none", 
+                    viewBox: "0 0 24 24", 
+                    strokeWidth: 1.5, 
+                    stroke: "currentColor", 
+                    className: "w-4 h-4 text-stone-400 absolute left-2.5 top-2" 
+                },
+                    React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" })
+                )
+            )
+        ),
+        !hasSearchResults && searchTerm ? 
+            React.createElement("p", { className: "text-stone-400 italic py-4" }, "Keine Ergebnisse für deine Suche gefunden.")
+        :
         Object.entries(groupedArchive).map(([year, months]) =>
-          React.createElement("details", { key: year, className: "mb-4 bg-stone-900/70 rounded-lg" },
+          React.createElement("details", { key: year, className: "mb-4 bg-stone-900/70 rounded-lg", open: !!searchTerm },
             React.createElement("summary", { className: "font-bold text-xl text-amber-200 cursor-pointer hover:text-amber-100 list-none flex items-center gap-2 p-3" },
                 icon("w-5 h-5 transition-transform details-open:rotate-90"),
                 year
             ),
             React.createElement("div", { className: "mt-2 px-3 pb-3" },
               Object.entries(months).map(([month, days]) =>
-                React.createElement("details", { key: month, className: "mb-2 bg-stone-900/50 rounded-lg" },
+                React.createElement("details", { key: month, className: "mb-2 bg-stone-900/50 rounded-lg", open: !!searchTerm },
                   React.createElement("summary", { className: "font-bold text-lg text-amber-300 cursor-pointer hover:text-amber-200 list-none flex items-center gap-2 p-2" },
                     icon("w-5 h-5 transition-transform details-open:rotate-90"),
                     month
                   ),
                   React.createElement("div", { className: "mt-2 p-2 border-t border-stone-700" },
                     days.sort((a,b) => parseInt(a.dateString) - parseInt(b.dateString)).map(day =>
-                      React.createElement("details", { key: day.dateString, className: "mb-2 bg-stone-900/30 rounded-lg" },
+                      React.createElement("details", { key: day.dateString, className: "mb-2 bg-stone-900/30 rounded-lg", open: !!searchTerm },
                         React.createElement("summary", { className: "font-semibold text-md text-amber-400 cursor-pointer hover:text-amber-300 list-none flex items-center gap-2 p-2" },
                           icon("w-4 h-4 transition-transform details-open:rotate-90"),
                           day.dateString
@@ -1661,12 +1699,19 @@ const EventTrackerModal = ({ isOpen, onClose, onAddEvent, scheduledEvents, onDel
     const [name, setName] = useState('');
     const [desc, setDesc] = useState('');
     
+    const [inputMode, setInputMode] = useState('date'); // 'date' or 'timer'
+    
     // Date selection states
     const [year, setYear] = useState(0);
     const [month, setMonth] = useState(0);
     const [day, setDay] = useState(1);
     const [hour, setHour] = useState(0);
     const [minute, setMinute] = useState(0);
+
+    // Timer selection states
+    const [timerDays, setTimerDays] = useState(0);
+    const [timerHours, setTimerHours] = useState(0);
+    const [timerMinutes, setTimerMinutes] = useState(0);
 
     // Sync with currentDate when opening
     useEffect(() => {
@@ -1684,9 +1729,27 @@ const EventTrackerModal = ({ isOpen, onClose, onAddEvent, scheduledEvents, onDel
     const handleSubmit = (e) => {
         e.preventDefault();
         if (name) {
-            onAddEvent(name, desc, { year, month, day, hour, minute });
+            if (inputMode === 'timer') {
+                const target = new Date(currentDate.getTime());
+                target.setDate(target.getDate() + timerDays);
+                target.setHours(target.getHours() + timerHours);
+                target.setMinutes(target.getMinutes() + timerMinutes);
+                
+                onAddEvent(name, desc, { 
+                    year: target.getFullYear(), 
+                    month: target.getMonth(), 
+                    day: target.getDate(), 
+                    hour: target.getHours(), 
+                    minute: target.getMinutes() 
+                });
+            } else {
+                onAddEvent(name, desc, { year, month, day, hour, minute });
+            }
             setName('');
             setDesc('');
+            setTimerDays(0);
+            setTimerHours(0);
+            setTimerMinutes(0);
             // Reset logic is handled by useEffect on reopen
         }
     };
@@ -1730,7 +1793,20 @@ const EventTrackerModal = ({ isOpen, onClose, onAddEvent, scheduledEvents, onDel
                          })
                     ),
                     
-                    React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-3 gap-3 bg-stone-800/50 p-3 rounded border border-stone-700" },
+                    React.createElement("div", { className: "flex space-x-4 mb-2" },
+                        React.createElement("button", {
+                            type: "button",
+                            onClick: () => setInputMode('date'),
+                            className: `px-4 py-2 rounded-md text-sm font-bold transition-colors ${inputMode === 'date' ? 'bg-amber-700 text-amber-100' : 'bg-stone-700 text-stone-400 hover:bg-stone-600'}`
+                        }, "Datum eingeben"),
+                        React.createElement("button", {
+                            type: "button",
+                            onClick: () => setInputMode('timer'),
+                            className: `px-4 py-2 rounded-md text-sm font-bold transition-colors ${inputMode === 'timer' ? 'bg-amber-700 text-amber-100' : 'bg-stone-700 text-stone-400 hover:bg-stone-600'}`
+                        }, "Timer (Dauer)")
+                    ),
+
+                    inputMode === 'date' ? React.createElement("div", { className: "grid grid-cols-2 sm:grid-cols-3 gap-3 bg-stone-800/50 p-3 rounded border border-stone-700" },
                         React.createElement("div", { className: "col-span-1" },
                              React.createElement("label", { className: "block text-xs text-stone-400 mb-1" }, "Jahr"),
                              React.createElement("input", {
@@ -1780,7 +1856,38 @@ const EventTrackerModal = ({ isOpen, onClose, onAddEvent, scheduledEvents, onDel
                                  onChange: (e) => setMinute(Math.min(59, Math.max(0, parseInt(e.target.value) || 0))),
                                  className: "w-full bg-stone-700 text-amber-50 border border-stone-600 rounded-md p-2 text-center"
                              })
+                        )
+                    ) : React.createElement("div", { className: "grid grid-cols-3 gap-3 bg-stone-800/50 p-3 rounded border border-stone-700" },
+                        React.createElement("div", null,
+                             React.createElement("label", { className: "block text-xs text-stone-400 mb-1" }, "Tage"),
+                             React.createElement("input", {
+                                 type: "number",
+                                 value: timerDays,
+                                 min: 0,
+                                 onChange: (e) => setTimerDays(Math.max(0, parseInt(e.target.value) || 0)),
+                                 className: "w-full bg-stone-700 text-amber-50 border border-stone-600 rounded-md p-2 text-center"
+                             })
                         ),
+                        React.createElement("div", null,
+                             React.createElement("label", { className: "block text-xs text-stone-400 mb-1" }, "Stunden"),
+                             React.createElement("input", {
+                                 type: "number",
+                                 value: timerHours,
+                                 min: 0,
+                                 onChange: (e) => setTimerHours(Math.max(0, parseInt(e.target.value) || 0)),
+                                 className: "w-full bg-stone-700 text-amber-50 border border-stone-600 rounded-md p-2 text-center"
+                             })
+                        ),
+                        React.createElement("div", null,
+                             React.createElement("label", { className: "block text-xs text-stone-400 mb-1" }, "Minuten"),
+                             React.createElement("input", {
+                                 type: "number",
+                                 value: timerMinutes,
+                                 min: 0,
+                                 onChange: (e) => setTimerMinutes(Math.max(0, parseInt(e.target.value) || 0)),
+                                 className: "w-full bg-stone-700 text-amber-50 border border-stone-600 rounded-md p-2 text-center"
+                             })
+                        )
                     ),
 
                     React.createElement("button", { type: "submit", className: "w-full bg-amber-700 hover:bg-amber-600 text-amber-100 font-bold py-2 rounded-md transition-colors flex items-center justify-center gap-2" }, 
@@ -1843,7 +1950,8 @@ const ActiveEventsWidget = ({ scheduledEvents, currentDate }) => {
                 } else {
                     const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
                     const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                    timeString = `${days} Tage, ${hours} Stunden verbleibend`;
+                    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+                    timeString = `${days} Tage, ${hours} Stunden, ${minutes} Minuten verbleibend`;
                 }
 
                 // Color calculation
