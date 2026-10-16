@@ -99,6 +99,18 @@ const GlobeIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.
   React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S12 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S12 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" })
 );
 
+const ArchiveIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", ...props },
+  React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M3.75 3.75h16.5v4.5H3.75zM5.25 8.25v12h13.5v-12M9 12h6" })
+);
+
+const SearchIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", ...props },
+  React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M21 21l-5.2-5.2m0 0a7.5 7.5 0 1 0-10.6-10.6 7.5 7.5 0 0 0 10.6 10.6z" })
+);
+
+const ChevronIcon = (props) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", ...props },
+  React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "m9 5 7 7-7 7" })
+);
+
 
 /* --- CONSTANTS --- */
 
@@ -546,6 +558,92 @@ const generateNewWeather = (zoneId, date, previousDayFinalWeather, startHour = 0
   return updateTemperatureForHour(initialWeather, date.getHours(), zoneId, date);
 };
 
+/* --- ARCHIVE AND SORTING HELPERS --- */
+
+// Display preferences live outside campaign saves. Old JSON exports need no migration.
+const EVENT_SORT_STORAGE_KEY = 'dnd_campaign_event_sort_order';
+
+const sortEventsByRemainingTime = (scheduledEvents, currentDate, order = 'asc') => {
+  const now = currentDate.getTime();
+  const direction = order === 'desc' ? -1 : 1;
+  return scheduledEvents
+    .map((event, index) => ({ event, index, remaining: new Date(event.targetDate).getTime() - now }))
+    .sort((a, b) => {
+      const aValid = Number.isFinite(a.remaining);
+      const bValid = Number.isFinite(b.remaining);
+      if (aValid !== bValid) return aValid ? -1 : 1;
+      if (!aValid) return a.index - b.index;
+      return direction * (a.remaining - b.remaining) || a.index - b.index;
+    })
+    .map(item => item.event);
+};
+
+const formatRemainingTime = (targetDate, currentDate) => {
+  const remaining = new Date(targetDate).getTime() - currentDate.getTime();
+  if (!Number.isFinite(remaining)) return 'Datum unbekannt';
+  if (remaining <= 0) return 'Ereignis eingetreten';
+  const totalMinutes = Math.ceil(remaining / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  return [days > 0 && `${days} ${days === 1 ? 'Tag' : 'Tage'}`, hours > 0 && `${hours} Std`, `${minutes} Min`]
+    .filter(Boolean).join(' · ');
+};
+
+const formatEventDuration = (duration) => {
+  const minutes = Number(duration);
+  if (!Number.isFinite(minutes) || minutes < 0) return '';
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const rest = minutes % 60;
+  return [days > 0 && `${days} T`, hours > 0 && `${hours} Std`, (rest > 0 || minutes === 0) && `${rest} Min`]
+    .filter(Boolean).join(' ');
+};
+
+// Archived saves contain a fantasy date label, not an ISO date. Parse that label
+// directly so ordering never depends on the browser's locale or Date.parse().
+const getArchiveDateInfo = (dateString) => {
+  const label = String(dateString || 'Unbekanntes Datum');
+  const yearMatch = label.match(/,\s*(-?\d+)/);
+  const monthMatch = label.match(/\((\d{1,2})\)/);
+  const dayMatch = label.match(/^\s*(\d{1,2})\./);
+  const year = yearMatch ? Number(yearMatch[1]) : null;
+  const monthNumber = monthMatch ? Number(monthMatch[1]) - 1 : -1;
+  const month = monthNumber >= 0 && monthNumber < 12
+    ? monthNumber : FANTASY_MONTHS.findIndex(name => label.includes(name));
+  const day = dayMatch ? Number(dayMatch[1]) : null;
+  return {
+    label, year, month, day,
+    shortLabel: year !== null && month >= 0 && day !== null
+      ? `${day}. ${FANTASY_MONTHS[month]}, ${year} DR` : label,
+    sortValue: year !== null && month >= 0 && day !== null ? year * 10000 + (month + 1) * 100 + day : null
+  };
+};
+
+const buildArchiveRows = (archivedDays) => archivedDays.flatMap((day, dayIndex) => {
+  const date = getArchiveDateInfo(day.dateString);
+  const dayEvents = Array.isArray(day.events) ? day.events : [];
+  return (dayEvents.length ? dayEvents : [null]).map((event, eventIndex) => ({
+    key: `${dayIndex}:${eventIndex}:${event ? event.id : 'empty'}`,
+    date, event, dayIndex, eventIndex,
+    searchText: [date.label, date.shortLabel, event?.description, event?.time, event?.endTime]
+      .filter(Boolean).join(' ').toLocaleLowerCase('de-DE')
+  }));
+});
+
+const compareArchiveRows = (a, b, order) => {
+  if ((a.date.sortValue === null) !== (b.date.sortValue === null)) return a.date.sortValue === null ? 1 : -1;
+  const direction = order === 'asc' ? 1 : -1;
+  const dateDifference = (a.date.sortValue ?? 0) - (b.date.sortValue ?? 0);
+  if (dateDifference) return direction * dateDifference;
+  const getMinutes = (time) => {
+    const match = String(time || '').match(/^(\d{1,2}):(\d{2})/);
+    return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+  };
+  return direction * (getMinutes(a.event?.time) - getMinutes(b.event?.time))
+    || a.dayIndex - b.dayIndex || a.eventIndex - b.eventIndex;
+};
+
 /* --- TOAST SYSTEM --- */
 
 const ToastContext = React.createContext();
@@ -678,8 +776,8 @@ const usePersistence = (currentDate, events, archivedDays, climateZone, currentW
             loadStateFromSaveCallback(newSave);
           } else {
             const activeId = savedActiveId ? JSON.parse(savedActiveId) : allSlots[0].id;
-            setActiveSaveId(activeId);
             const activeSave = allSlots.find(s => s.id === activeId) || allSlots[0];
+            setActiveSaveId(activeSave.id);
             loadStateFromSaveCallback(activeSave);
           }
           
@@ -817,6 +915,128 @@ const usePersistence = (currentDate, events, archivedDays, climateZone, currentW
 
 /* --- COMPONENTS --- */
 
+// The new controls carry their own styles, so existing Tailwind setups need no
+// configuration changes and no additional packages are required.
+const TimekeeperStyles = () => React.createElement("style", null, `
+  .tk-tabs { display:flex; gap:6px; margin-bottom:20px; padding:5px; width:fit-content; max-width:100%; border:1px solid #57534e; border-radius:12px; background:rgba(28,25,23,.92); }
+  .tk-tab { display:flex; align-items:center; gap:9px; min-height:44px; padding:9px 18px; border:1px solid transparent; border-radius:8px; color:#d6d3d1; background:transparent; font-size:14px; font-weight:600; cursor:pointer; }
+  .tk-tab:hover { color:#fef3c7; background:#292524; }
+  .tk-tab[aria-selected="true"] { color:#fde68a; background:#451a03; border-color:#a16207; }
+  .tk-tab svg { width:19px; height:19px; flex-shrink:0; }
+  .tk-tab-count { padding:1px 7px; border-radius:6px; font-size:12px; color:#d6d3d1; background:rgba(120,113,108,.2); }
+  .tk-tab:focus-visible, .tk-button:focus-visible, .tk-entry-summary:focus-visible { outline:2px solid #fbbf24; outline-offset:3px; }
+  .tk-archive { color:#f5f5f4; background:rgba(28,25,23,.95); border:1px solid #57534e; border-radius:12px; overflow:hidden; }
+  .tk-archive-header { padding:22px 24px 18px; border-bottom:1px solid #44403c; }
+  .tk-archive-title { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:0; color:#fcd34d; font-size:25px; }
+  .tk-archive-title svg { width:23px; height:23px; }
+  .tk-archive-stats { margin:5px 0 0; color:#a8a29e; font-size:13px; }
+  .tk-archive-filters { display:grid; grid-template-columns:minmax(180px,1fr) 115px 165px 165px; align-items:end; gap:12px; margin-top:18px; }
+  .tk-field { display:flex; flex-direction:column; gap:6px; min-width:0; color:#d6d3d1; font-size:12px; font-weight:600; }
+  .tk-input, .tk-select { width:100%; min-height:40px; padding:8px 10px; border:1px solid #57534e; border-radius:7px; background:#292524; color:#f5f5f4; font-size:14px; font-weight:400; color-scheme:dark; }
+  .tk-input::placeholder { color:#a8a29e; }
+  .tk-input:focus, .tk-select:focus { outline:2px solid #d97706; outline-offset:1px; border-color:#f59e0b; }
+  .tk-search { position:relative; }
+  .tk-search svg { position:absolute; left:11px; top:11px; width:18px; height:18px; color:#a8a29e; pointer-events:none; }
+  .tk-search input { padding-left:37px; }
+  .tk-archive-options { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:12px; margin-top:14px; }
+  .tk-button.tk-filter-toggle { display:none; }
+  .tk-checkbox { display:flex; align-items:center; gap:8px; color:#d6d3d1; font-size:13px; cursor:pointer; }
+  .tk-checkbox input { width:16px; height:16px; accent-color:#f59e0b; }
+  .tk-button { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:36px; padding:6px 12px; border:1px solid #57534e; border-radius:7px; background:#292524; color:#e7e5e4; font-size:13px; cursor:pointer; }
+  .tk-button:hover:not(:disabled) { border-color:#d97706; color:#fde68a; background:#44403c; }
+  .tk-button:disabled { opacity:.4; cursor:default; }
+  .tk-pager { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:10px; padding:12px 24px; color:#a8a29e; font-size:13px; }
+  .tk-pager-controls { display:flex; align-items:center; gap:8px; }
+  .tk-pager-page { min-width:88px; text-align:center; color:#d6d3d1; font-variant-numeric:tabular-nums; }
+  .tk-page-size { display:flex; align-items:center; gap:8px; color:#d6d3d1; font-size:13px; }
+  .tk-page-size select { width:auto; min-height:34px; padding:4px 8px; font-size:13px; }
+  .tk-entry { border-top:1px solid #44403c; }
+  .tk-entry:nth-child(even) { background:rgba(68,64,60,.14); }
+  .tk-entry-summary { display:grid; grid-template-columns:205px minmax(0,1fr) 18px; align-items:center; gap:18px; width:100%; padding:12px 24px; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+  .tk-entry-summary:hover { background:rgba(120,113,108,.12); }
+  .tk-entry-date { display:block; color:#fde68a; font-size:13px; font-weight:600; }
+  .tk-entry-time { display:block; margin-top:3px; color:#a8a29e; font-size:12px; font-variant-numeric:tabular-nums; }
+  .tk-entry-preview { min-width:0; color:#e7e5e4; font-size:14px; line-height:1.55; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere; }
+  .tk-entry-chevron { width:18px; height:18px; color:#a8a29e; transition:transform .15s; }
+  .tk-entry-summary[aria-expanded="true"] .tk-entry-chevron { transform:rotate(90deg); color:#fbbf24; }
+  .tk-entry[aria-label="Leerer Tag"] .tk-entry-summary { cursor:default; }
+  .tk-entry-body { padding:2px 60px 20px 247px; color:#f5f5f4; font-size:14px; line-height:1.75; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .tk-archive mark { padding:0 2px; border-radius:2px; background:#854d0e; color:#fef3c7; }
+  .tk-archive-empty { padding:56px 24px; text-align:center; color:#d6d3d1; }
+  .tk-archive-empty svg { width:36px; height:36px; margin:0 auto 14px; color:#a8a29e; }
+  .tk-archive-empty h3 { margin:0 0 8px; color:#fde68a; font-size:18px; }
+  .tk-archive-empty p { margin:0 0 16px; font-size:14px; }
+  .tk-sort-control { display:flex; align-items:center; gap:8px; color:#d6d3d1; font-size:12px; }
+  .tk-sort-control select { width:auto; min-height:34px; max-width:100%; padding:5px 8px; font-size:12px; }
+  .tk-events-heading { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:12px; margin-bottom:16px; }
+  .tk-events-heading h2, .tk-events-heading h3 { margin:0; }
+  [role="tabpanel"][hidden] { display:none !important; }
+  @media (max-width:900px) {
+    .tk-archive-filters { grid-template-columns:minmax(180px,1fr) 1fr; }
+    .tk-entry-summary { grid-template-columns:180px minmax(0,1fr) 18px; gap:14px; }
+    .tk-entry-body { padding-left:218px; }
+  }
+  @media (max-width:540px) {
+    .tk-tabs { width:100%; }
+    .tk-tab { flex:1; justify-content:center; padding:9px 10px; }
+    .tk-archive-header { padding:18px 16px 14px; }
+    .tk-archive-filters { gap:10px; grid-template-columns:1fr 1fr; }
+    .tk-field-search { grid-column:1 / -1; }
+    .tk-field-order { grid-column:1 / -1; }
+    .tk-button.tk-filter-toggle { display:inline-flex; margin-top:10px; }
+    .tk-archive:not(.tk-filters-open) .tk-field:not(.tk-field-search),
+    .tk-archive:not(.tk-filters-open) .tk-archive-options { display:none; }
+    .tk-entry-summary { grid-template-columns:minmax(0,1fr) 18px; gap:6px 10px; padding:12px 16px; }
+    .tk-entry-meta { grid-column:1; display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; }
+    .tk-entry-time { margin-top:0; }
+    .tk-entry-preview { grid-column:1; grid-row:2; }
+    .tk-entry-chevron { grid-column:2; grid-row:1 / 3; }
+    .tk-entry-body { padding:0 16px 18px; }
+    .tk-pager { padding:12px 16px; }
+    .tk-sort-control { width:100%; justify-content:space-between; }
+  }
+  @media (max-width:359px) {
+    .tk-header-status { flex-wrap:wrap; max-width:100%; }
+  }
+`);
+
+const CampaignTabs = ({ activeTab, onTabChange, archiveCount }) => {
+  const tabs = [
+    { id: 'today', label: 'Aktueller Tag', icon: CalendarIcon },
+    { id: 'archive', label: 'Archiv', icon: ArchiveIcon }
+  ];
+  const handleKeyDown = (event, index) => {
+    let next = index;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    onTabChange(tabs[next].id);
+    document.getElementById(`tab-${tabs[next].id}`)?.focus();
+  };
+  return React.createElement("nav", { className: "tk-tabs", role: "tablist", "aria-label": "Kampagnenansicht" },
+    tabs.map((tab, index) => React.createElement("button", {
+      key: tab.id, id: `tab-${tab.id}`, type: "button", role: "tab", className: "tk-tab",
+      "aria-selected": activeTab === tab.id, "aria-controls": `panel-${tab.id}`,
+      tabIndex: activeTab === tab.id ? 0 : -1,
+      onClick: () => onTabChange(tab.id), onKeyDown: (event) => handleKeyDown(event, index)
+    },
+      React.createElement(tab.icon, { "aria-hidden": true }), tab.label,
+      tab.id === 'archive' && React.createElement("span", { className: "tk-tab-count", "aria-label": `${archiveCount} archivierte Tage` }, archiveCount)
+    ))
+  );
+};
+
+const EventSortControl = ({ value, onChange, id }) => React.createElement("label", { className: "tk-sort-control", htmlFor: id },
+  "Restlaufzeit",
+  React.createElement("select", { id, className: "tk-select", value, onChange: (event) => onChange(event.target.value) },
+    React.createElement("option", { value: "asc" }, "Aufsteigend · kürzeste zuerst"),
+    React.createElement("option", { value: "desc" }, "Absteigend · längste zuerst")
+  )
+);
+
 const DailyTimelineVisualizer = ({ events, currentTime, sunlightData }) => {
     const totalMinutesInDay = 24 * 60;
     
@@ -943,24 +1163,39 @@ const DeleteSaveModal = ({ isOpen, onClose, onConfirm, saveName }) => {
 
 const DowntimeModal = ({ isOpen, onClose, onConfirm }) => {
   const [days, setDays] = useState(1);
+  const [description, setDescription] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setDays(1);
+      setDescription('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
   }
 
-  const handleConfirm = () => {
-    onConfirm(days);
+  const validDays = Number.isSafeInteger(Number(days)) && Number(days) >= 1;
+  const handleConfirm = (e) => {
+    e.preventDefault();
+    if (validDays) onConfirm(Number(days), description.trim());
   };
 
   return React.createElement("div", {
       className: "fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75",
       onClick: onClose
     },
-    React.createElement("div", {
-        className: "bg-stone-800 rounded-lg shadow-xl p-6 border-2 border-amber-700 w-full max-w-md mx-4",
+    React.createElement("form", {
+        className: "bg-stone-800 rounded-lg shadow-xl p-6 border-2 border-amber-700 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto",
+        role: "dialog",
+        "aria-modal": true,
+        "aria-labelledby": "downtime-title",
+        onSubmit: handleConfirm,
+        onKeyDown: (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } },
         onClick: (e) => e.stopPropagation()
       },
-      React.createElement("h2", { className: "font-medieval text-2xl text-amber-300 mb-4" }, "Auszeit festlegen"),
+      React.createElement("h2", { id: "downtime-title", className: "font-medieval text-2xl text-amber-300 mb-4" }, "Auszeit festlegen"),
       React.createElement("p", { className: "text-amber-200 mb-4" }, "Wie viele Tage sollen übersprungen werden? Die Zeit wird bis 08:00 Uhr morgens am Zieldatum vorgespult."),
       React.createElement("div", { className: "mb-6" },
         React.createElement("label", { htmlFor: "downtime-days", className: "block text-amber-300 mb-2" }, "Anzahl der Tage"),
@@ -968,19 +1203,35 @@ const DowntimeModal = ({ isOpen, onClose, onConfirm }) => {
           id: "downtime-days",
           type: "number",
           value: days,
-          onChange: (e) => setDays(Math.max(1, parseInt(e.target.value) || 1)),
+          onChange: (e) => setDays(e.target.value),
           min: "1",
+          step: "1",
+          required: true,
+          autoFocus: true,
           className: "w-full bg-stone-700 text-amber-50 placeholder-stone-400 border border-stone-600 rounded-md p-2 text-center focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
+        })
+      ),
+      React.createElement("div", { className: "mb-6" },
+        React.createElement("label", { htmlFor: "downtime-description", className: "block text-amber-300 mb-2" }, "Beschreibung (optional)"),
+        React.createElement("textarea", {
+          id: "downtime-description",
+          value: description,
+          onChange: (e) => setDescription(e.target.value),
+          placeholder: "Was geschieht während der Auszeit? Zum Beispiel Training, Handwerk oder Nachforschungen …",
+          rows: 4,
+          className: "w-full bg-stone-700 text-amber-50 placeholder-stone-400 border border-stone-600 rounded-md p-3 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-y"
         })
       ),
       React.createElement("div", { className: "flex justify-end gap-4" },
         React.createElement("button", {
+            type: "button",
             onClick: onClose,
             className: "bg-stone-600 text-amber-200 font-bold px-4 py-2 rounded-md hover:bg-stone-500 transition-colors"
           }, "Abbrechen"),
         React.createElement("button", {
-            onClick: handleConfirm,
-            className: "bg-amber-600 text-stone-900 font-bold px-4 py-2 rounded-md hover:bg-amber-500 transition-colors"
+            type: "submit",
+            disabled: !validDays,
+            className: "bg-amber-600 text-stone-900 font-bold px-4 py-2 rounded-md hover:bg-amber-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           }, "Bestätigen")
       )
     )
@@ -1070,7 +1321,7 @@ const Header = ({
         React.createElement("h1", { className: "font-medieval text-2xl md:text-4xl text-amber-300 tracking-wider" }, "Kampagnen-Zeitmesser"),
         activeSaveName && React.createElement("span", { className: "hidden md:inline-block mt-2 text-amber-400 font-bold bg-stone-800/50 px-3 py-1 rounded-md text-sm" }, activeSaveName)
       ),
-      React.createElement("div", { className: "flex items-center gap-4 md:gap-6" },
+      React.createElement("div", { className: "tk-header-status flex items-center gap-4 md:gap-6" },
         React.createElement("div", { className: "flex items-center gap-3 text-amber-200", title: weather.description },
           React.createElement(WeatherIcon, { className: "w-8 h-8" }),
           React.createElement("div", { className: "flex items-center" },
@@ -1528,133 +1779,214 @@ const TimelineItem = ({ event, isFirst = false, onEdit, onDelete }) => {
     );
 };
 
-const Timeline = ({ events, archivedDays, currentDate, sunlightData, onEditEvent, onDeleteEvent }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-
-  if (events.length === 0 && archivedDays.length === 0) {
-    return React.createElement("div", { className: "h-full flex items-center justify-center bg-stone-800 bg-opacity-70 rounded-lg p-8" },
-      React.createElement("div", { className: "text-center" },
-        React.createElement("p", { className: "font-medieval text-3xl text-amber-300" }, "Die Geschichte beginnt..."),
-        React.createElement("p", { className: "text-amber-200 mt-2" }, "Füge das erste Ereignis hinzu, um die Zeitleiste zu starten.")
-      )
-    );
+const HighlightText = ({ text, terms }) => {
+  const source = String(text || '');
+  if (!terms.length) return source;
+  const lower = source.toLocaleLowerCase('de-DE');
+  const parts = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    const match = terms.map(term => ({ term, index: lower.indexOf(term, cursor) }))
+      .filter(item => item.index >= 0)
+      .sort((a, b) => a.index - b.index || b.term.length - a.term.length)[0];
+    if (!match) { parts.push(source.slice(cursor)); break; }
+    if (match.index > cursor) parts.push(source.slice(cursor, match.index));
+    const end = match.index + match.term.length;
+    parts.push(React.createElement("mark", { key: `${match.index}-${end}` }, source.slice(match.index, end)));
+    cursor = end;
   }
+  return React.createElement(React.Fragment, null, ...parts);
+};
 
-  const groupArchivedDays = () => {
-    const grouped = {};
-    archivedDays.forEach(day => {
-      // Filter logic
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = !searchTerm || 
-        day.dateString.toLowerCase().includes(searchLower) ||
-        day.events.some(event => 
-          event.description.toLowerCase().includes(searchLower) || 
-          event.time.toLowerCase().includes(searchLower)
-        );
+const getArchiveExcerpt = (description, terms) => {
+  const raw = String(description || '');
+  const fullText = raw.replace(/\s+/g, ' ').trim();
+  const primaryText = raw.split(/\n\s*\n/)[0].replace(/\s+/g, ' ').trim();
+  const matchOutsidePrimary = terms.some(term => fullText.toLocaleLowerCase('de-DE').includes(term)
+    && !primaryText.toLocaleLowerCase('de-DE').includes(term));
+  const text = matchOutsidePrimary ? fullText : primaryText || fullText;
+  const lower = text.toLocaleLowerCase('de-DE');
+  const firstMatch = terms.map(term => lower.indexOf(term)).filter(index => index >= 0).sort((a, b) => a - b)[0];
+  const start = firstMatch > 120 ? Math.max(0, firstMatch - 55) : 0;
+  const end = start + 240;
+  return `${start ? '… ' : ''}${text.slice(start, end)}${end < text.length || text.length < fullText.length ? ' …' : ''}`;
+};
 
-      if (!matchesSearch) return;
-
-      const parts = day.dateString.split(', ');
-      if (parts.length < 2) return;
-      const year = parts[1];
-      const monthPart = parts[0].split(' ').slice(1).join(' ');
-      if (!grouped[year]) grouped[year] = {};
-      if (!grouped[year][monthPart]) grouped[year][monthPart] = [];
-      grouped[year][monthPart].push(day);
-    });
-    return grouped;
-  };
-
-  const groupedArchive = groupArchivedDays();
-  const hasSearchResults = Object.keys(groupedArchive).length > 0;
-  
-  const icon = (className) => React.createElement("svg", { xmlns: "http://www.w3.org/2000/svg", fill: "none", viewBox: "0 0 24 24", strokeWidth: 1.5, stroke: "currentColor", className: className },
-      React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M8.25 4.5l7.5 7.5-7.5 7.5" })
-  );
-
-  return React.createElement("div", { className: "bg-stone-800 bg-opacity-70 rounded-lg p-4 sm:p-6 max-h-[calc(100vh-250px)] overflow-y-auto" },
-    React.createElement("h2", { className: "font-medieval text-2xl text-amber-300 mb-2 sticky top-0 bg-stone-800/95 py-2 z-10 border-b border-amber-900" }, "Aktueller Tag"),
-    React.createElement(DailyTimelineVisualizer, { events: events, currentTime: currentDate, sunlightData: sunlightData }),
-    events.length > 0 ?
-      events.map((event, index) => React.createElement(TimelineItem, { 
-          key: event.id + '-' + index, 
-          event: event, 
-          isFirst: index === 0,
-          onEdit: onEditEvent,
-          onDelete: onDeleteEvent
-      }))
-      :
-      React.createElement("p", { className: "text-amber-400 italic py-4 pl-8" }, "Noch keine Ereignisse für heute. Die Zeit für neue Abenteuer!"),
-    archivedDays.length > 0 &&
-      React.createElement(React.Fragment, null,
-        React.createElement("div", { className: "mt-8 mb-4 pt-4 border-t border-amber-900 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" },
-            React.createElement("h2", { className: "font-medieval text-2xl text-amber-300" }, "Archiv"),
-            React.createElement("div", { className: "relative w-full sm:w-64" },
-                React.createElement("input", {
-                    type: "text",
-                    placeholder: "Archiv durchsuchen...",
-                    value: searchTerm,
-                    onChange: (e) => setSearchTerm(e.target.value),
-                    className: "w-full bg-stone-900 text-amber-100 border border-stone-600 rounded-md py-1.5 pl-8 pr-3 text-sm focus:ring-1 focus:ring-amber-500 outline-none"
-                }),
-                React.createElement("svg", { 
-                    xmlns: "http://www.w3.org/2000/svg", 
-                    fill: "none", 
-                    viewBox: "0 0 24 24", 
-                    strokeWidth: 1.5, 
-                    stroke: "currentColor", 
-                    className: "w-4 h-4 text-stone-400 absolute left-2.5 top-2" 
-                },
-                    React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", d: "M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" })
-                )
-            )
+const ArchiveEntry = ({ row, terms }) => {
+  const [expanded, setExpanded] = useState(false);
+  const event = row.event;
+  const duration = event ? formatEventDuration(event.duration) : '';
+  const bodyId = `archive-entry-${row.key}`;
+  const description = event ? String(event.description || 'Ohne Beschreibung') : 'Keine besonderen Ereignisse an diesem Tag.';
+  return React.createElement("article", { className: "tk-entry", role: "listitem", "aria-label": event ? undefined : "Leerer Tag" },
+    React.createElement(event ? "button" : "div", {
+      className: "tk-entry-summary",
+      ...(event ? { type: "button", "aria-expanded": expanded, "aria-controls": bodyId, onClick: () => setExpanded(value => !value) } : {})
+    },
+      React.createElement("span", { className: "tk-entry-meta" },
+        React.createElement("span", { className: "tk-entry-date", title: row.date.label },
+          React.createElement(HighlightText, { text: row.date.shortLabel, terms })
         ),
-        !hasSearchResults && searchTerm ? 
-            React.createElement("p", { className: "text-stone-400 italic py-4" }, "Keine Ergebnisse für deine Suche gefunden.")
-        :
-        Object.entries(groupedArchive).map(([year, months]) =>
-          React.createElement("details", { key: year, className: "mb-4 bg-stone-900/70 rounded-lg", open: !!searchTerm },
-            React.createElement("summary", { className: "font-bold text-xl text-amber-200 cursor-pointer hover:text-amber-100 list-none flex items-center gap-2 p-3" },
-                icon("w-5 h-5 transition-transform details-open:rotate-90"),
-                year
-            ),
-            React.createElement("div", { className: "mt-2 px-3 pb-3" },
-              Object.entries(months).map(([month, days]) =>
-                React.createElement("details", { key: month, className: "mb-2 bg-stone-900/50 rounded-lg", open: !!searchTerm },
-                  React.createElement("summary", { className: "font-bold text-lg text-amber-300 cursor-pointer hover:text-amber-200 list-none flex items-center gap-2 p-2" },
-                    icon("w-5 h-5 transition-transform details-open:rotate-90"),
-                    month
-                  ),
-                  React.createElement("div", { className: "mt-2 p-2 border-t border-stone-700" },
-                    days.sort((a,b) => parseInt(a.dateString) - parseInt(b.dateString)).map(day =>
-                      React.createElement("details", { key: day.dateString, className: "mb-2 bg-stone-900/30 rounded-lg", open: !!searchTerm },
-                        React.createElement("summary", { className: "font-semibold text-md text-amber-400 cursor-pointer hover:text-amber-300 list-none flex items-center gap-2 p-2" },
-                          icon("w-4 h-4 transition-transform details-open:rotate-90"),
-                          day.dateString
-                        ),
-                        React.createElement("div", { className: "border-l-2 border-stone-600 ml-3 pl-2 pt-2" },
-                          day.events.length > 0 ?
-                            day.events.map((event, index) => React.createElement(TimelineItem, { 
-                                key: event.id + '-' + index, 
-                                event: event,
-                                onEdit: () => {}, 
-                                onDelete: () => {}
-                            }))
-                            :
-                            React.createElement("p", { className: "text-amber-500 italic py-2 pl-8 sm:pl-12" }, "Keine besonderen Ereignisse an diesem Tag.")
-                        )
-                      )
-                    )
-                  )
-                )
+        React.createElement("span", { className: "tk-entry-time" },
+          React.createElement(HighlightText, { text: event
+            ? `${event.time || '–'}–${event.endTime || '–'} Uhr${duration ? ` · ${duration}` : ''}`
+            : 'Ohne Einträge', terms })
+        )
+      ),
+      React.createElement("span", { className: "tk-entry-preview" },
+        React.createElement(HighlightText, { text: event ? getArchiveExcerpt(description, terms) : description, terms })
+      ),
+      event && React.createElement(ChevronIcon, { className: "tk-entry-chevron", "aria-hidden": true })
+    ),
+    event && expanded && React.createElement("div", { id: bodyId, className: "tk-entry-body" },
+      React.createElement(HighlightText, { text: description, terms })
+    )
+  );
+};
+
+const ArchivePager = ({ page, pageCount, total, pageSize, onPageChange, label }) => {
+  const from = total ? (page - 1) * pageSize + 1 : 0;
+  const to = Math.min(page * pageSize, total);
+  return React.createElement("nav", { className: "tk-pager", "aria-label": label },
+    React.createElement("span", { role: "status", "aria-live": "polite" }, `${from}–${to} von ${total.toLocaleString('de-DE')} Einträgen`),
+    React.createElement("div", { className: "tk-pager-controls" },
+      React.createElement("button", { type: "button", className: "tk-button", disabled: page <= 1, onClick: () => onPageChange(page - 1), "aria-label": "Vorherige Archivseite" }, "Zurück"),
+      React.createElement("span", { className: "tk-pager-page" }, `Seite ${page} / ${pageCount}`),
+      React.createElement("button", { type: "button", className: "tk-button", disabled: page >= pageCount, onClick: () => onPageChange(page + 1), "aria-label": "Nächste Archivseite" }, "Weiter")
+    )
+  );
+};
+
+const ArchiveView = ({ archivedDays }) => {
+  const [query, setQuery] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [order, setOrder] = useState('desc');
+  const [includeEmptyDays, setIncludeEmptyDays] = useState(false);
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const panelRef = useRef(null);
+  const rows = useMemo(() => buildArchiveRows(archivedDays), [archivedDays]);
+  const terms = useMemo(() => query.trim().toLocaleLowerCase('de-DE').split(/\s+/).filter(Boolean), [query]);
+  const years = useMemo(() => [...new Set(rows.map(row => row.date.year).filter(year => year !== null))].sort((a, b) => b - a), [rows]);
+  const entryCount = rows.filter(row => row.event).length;
+  const filteredRows = useMemo(() => rows.filter(row =>
+    (includeEmptyDays || row.event)
+    && (!selectedYear || (selectedYear === 'unknown' ? row.date.year === null : String(row.date.year) === selectedYear))
+    && (selectedMonth === '' || String(row.date.month) === selectedMonth)
+    && terms.every(term => row.searchText.includes(term))
+  ).sort((a, b) => compareArchiveRows(a, b, order)), [rows, includeEmptyDays, selectedYear, selectedMonth, terms, order]);
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visibleRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const hasFilters = !!(query || selectedYear || selectedMonth !== '' || includeEmptyDays);
+
+  const updateFilter = (setter, value) => { setter(value); setPage(1); };
+  const resetFilters = () => {
+    setQuery(''); setSelectedYear(''); setSelectedMonth(''); setIncludeEmptyDays(false); setPage(1);
+  };
+  const changePage = (nextPage) => {
+    setPage(Math.max(1, Math.min(pageCount, nextPage)));
+    const panel = panelRef.current;
+    if (panel) {
+      const headerHeight = document.querySelector('header')?.getBoundingClientRect().height || 0;
+      const top = window.scrollY + panel.getBoundingClientRect().top - headerHeight - 16;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+    }
+  };
+  const pagerProps = { page: currentPage, pageCount, total: filteredRows.length, pageSize, onPageChange: changePage };
+
+  return React.createElement("section", { className: `tk-archive${filtersExpanded ? ' tk-filters-open' : ''}`, ref: panelRef, "aria-labelledby": "archive-heading" },
+    React.createElement("div", { className: "tk-archive-header" },
+      React.createElement("h2", { id: "archive-heading", className: "tk-archive-title font-medieval" }, React.createElement(ArchiveIcon, { "aria-hidden": true }), "Archiv"),
+      React.createElement("p", { className: "tk-archive-stats" }, `${entryCount.toLocaleString('de-DE')} ${entryCount === 1 ? 'Ereignis' : 'Ereignisse'} · ${archivedDays.length.toLocaleString('de-DE')} ${archivedDays.length === 1 ? 'archivierter Tag' : 'archivierte Tage'}`),
+      archivedDays.length > 0 && React.createElement(React.Fragment, null,
+        React.createElement("div", { id: "archive-filters", className: "tk-archive-filters" },
+          React.createElement("label", { className: "tk-field tk-field-search", htmlFor: "archive-search" },
+            "Suche",
+            React.createElement("span", { className: "tk-search" },
+              React.createElement(SearchIcon, { "aria-hidden": true }),
+              React.createElement("input", { id: "archive-search", type: "search", className: "tk-input", value: query, placeholder: "Name, Ort, Ereignis oder Datum …", onChange: (event) => updateFilter(setQuery, event.target.value) })
+            )
+          ),
+          React.createElement("label", { className: "tk-field", htmlFor: "archive-year" },
+            "Jahr",
+            React.createElement("select", { id: "archive-year", className: "tk-select", value: selectedYear, onChange: (event) => updateFilter(setSelectedYear, event.target.value) },
+              React.createElement("option", { value: "" }, "Alle Jahre"),
+              years.map(year => React.createElement("option", { key: year, value: String(year) }, `${year} DR`)),
+              rows.some(row => row.date.year === null) && React.createElement("option", { value: "unknown" }, "Unbekannt")
+            )
+          ),
+          React.createElement("label", { className: "tk-field", htmlFor: "archive-month" },
+            "Monat",
+            React.createElement("select", { id: "archive-month", className: "tk-select", value: selectedMonth, onChange: (event) => updateFilter(setSelectedMonth, event.target.value) },
+              React.createElement("option", { value: "" }, "Alle Monate"),
+              FANTASY_MONTHS.map((month, index) => React.createElement("option", { key: month, value: String(index) }, month)),
+              rows.some(row => row.date.month < 0) && React.createElement("option", { value: "-1" }, "Unbekannt")
+            )
+          ),
+          React.createElement("label", { className: "tk-field tk-field-order", htmlFor: "archive-order" },
+            "Reihenfolge",
+            React.createElement("select", { id: "archive-order", className: "tk-select", value: order, onChange: (event) => updateFilter(setOrder, event.target.value) },
+              React.createElement("option", { value: "desc" }, "Neueste zuerst"),
+              React.createElement("option", { value: "asc" }, "Älteste zuerst")
+            )
+          )
+        ),
+        React.createElement("button", {
+          type: "button", className: "tk-button tk-filter-toggle", "aria-expanded": filtersExpanded,
+          "aria-controls": "archive-filters archive-options", onClick: () => setFiltersExpanded(value => !value)
+        }, `${filtersExpanded ? 'Filter schließen' : 'Filter & Anzeige'}${hasFilters ? ' · aktiv' : ''}`),
+        React.createElement("div", { id: "archive-options", className: "tk-archive-options" },
+          React.createElement("label", { className: "tk-checkbox" },
+            React.createElement("input", { type: "checkbox", checked: includeEmptyDays, onChange: (event) => updateFilter(setIncludeEmptyDays, event.target.checked) }),
+            "Tage ohne Einträge anzeigen"
+          ),
+          React.createElement("div", { style: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' } },
+            hasFilters && React.createElement("button", { type: "button", className: "tk-button", onClick: resetFilters }, "Filter zurücksetzen"),
+            React.createElement("label", { className: "tk-page-size", htmlFor: "archive-page-size" },
+              "Pro Seite",
+              React.createElement("select", { id: "archive-page-size", className: "tk-select", value: pageSize, onChange: (event) => updateFilter(setPageSize, Number(event.target.value)) },
+                [25, 50, 100].map(size => React.createElement("option", { key: size, value: size }, size))
               )
             )
           )
         )
+      )
+    ),
+    filteredRows.length > 0 ? React.createElement(React.Fragment, null,
+      React.createElement(ArchivePager, { ...pagerProps, label: "Archivseiten oben" }),
+      React.createElement("div", { role: "list", "aria-label": "Archivierte Einträge" },
+        visibleRows.map(row => React.createElement(ArchiveEntry, { key: row.key, row, terms }))
       ),
-      React.createElement("style", null, `details > summary { list-style: none; } details[open] > summary svg { transform: rotate(90deg); }`)
+      React.createElement(ArchivePager, { ...pagerProps, label: "Archivseiten unten" })
+    ) : React.createElement("div", { className: "tk-archive-empty", role: "status" },
+      React.createElement(ArchiveIcon, { "aria-hidden": true }),
+      React.createElement("h3", null, archivedDays.length === 0 ? 'Deine Chronik wartet auf Abenteuer' : 'Keine passenden Einträge'),
+      React.createElement("p", null, archivedDays.length === 0
+        ? 'Vergangene Tage erscheinen hier automatisch, sobald die Kampagnenzeit über Mitternacht hinausgeht.'
+        : entryCount === 0 && !includeEmptyDays && !query && !selectedYear && selectedMonth === ''
+          ? 'Bisher sind nur Tage ohne besondere Ereignisse archiviert. Blende sie über die Filter ein.'
+          : 'Passe die Suche oder die Datumsfilter an, um weitere Einträge zu finden.'
+      ),
+      hasFilters && React.createElement("button", { type: "button", className: "tk-button", onClick: resetFilters }, "Filter zurücksetzen")
+    )
   );
 };
+
+const Timeline = ({ events, currentDate, sunlightData, onEditEvent, onDeleteEvent }) => {
+  return React.createElement("div", { className: "bg-stone-800 bg-opacity-70 rounded-lg p-4 sm:p-6 max-h-[calc(100vh-250px)] overflow-y-auto" },
+    React.createElement("h2", { className: "font-medieval text-2xl text-amber-300 mb-2 sticky top-0 bg-stone-800/95 py-2 z-10 border-b border-amber-900" }, "Aktueller Tag"),
+    React.createElement(DailyTimelineVisualizer, { events, currentTime: currentDate, sunlightData }),
+    events.length > 0
+      ? events.map((event, index) => React.createElement(TimelineItem, {
+          key: event.id + '-' + index, event, isFirst: index === 0, onEdit: onEditEvent, onDelete: onDeleteEvent
+        }))
+      : React.createElement("p", { className: "text-amber-400 italic py-4 pl-8" }, "Noch keine Ereignisse für heute. Die Zeit für neue Abenteuer!")
+  );
+};
+
 
 const WeatherLegend = ({ currentWeather }) => {
   const effects = Object.values(WEATHER_EFFECTS);
@@ -1695,7 +2027,7 @@ const WeatherLegend = ({ currentWeather }) => {
 
 /* --- EVENT TRACKER COMPONENTS --- */
 
-const EventTrackerModal = ({ isOpen, onClose, onAddEvent, scheduledEvents, onDeleteEvent, currentDate }) => {
+const EventTrackerModal = ({ isOpen, onClose, onAddEvent, scheduledEvents, onDeleteEvent, currentDate, sortOrder, onSortOrderChange }) => {
     const [name, setName] = useState('');
     const [desc, setDesc] = useState('');
     
@@ -1897,16 +2229,20 @@ const EventTrackerModal = ({ isOpen, onClose, onAddEvent, scheduledEvents, onDel
                 )
             ),
 
-            React.createElement("h3", { className: "text-amber-300 font-bold mb-3" }, "Aktive Ereignisse"),
+            React.createElement("div", { className: "tk-events-heading" },
+                React.createElement("h3", { className: "text-amber-300 font-bold" }, "Aktive Ereignisse"),
+                React.createElement(EventSortControl, { id: "modal-event-order", value: sortOrder, onChange: onSortOrderChange })
+            ),
             React.createElement("div", { className: "space-y-3" },
                 scheduledEvents.length === 0 && React.createElement("p", { className: "text-stone-500 italic" }, "Keine Ereignisse geplant."),
                 scheduledEvents.map(event =>
                     React.createElement("div", { key: event.id, className: "bg-stone-700/40 p-3 rounded flex justify-between items-center border border-stone-600" },
-                        React.createElement("div", null,
+                        React.createElement("div", { className: "min-w-0" },
                             React.createElement("p", { className: "text-amber-200 font-bold" }, event.name),
+                            React.createElement("p", { className: "text-amber-300 text-sm" }, formatRemainingTime(event.targetDate, currentDate)),
                             React.createElement("p", { className: "text-stone-400 text-sm" }, `Fällig am: ${new Date(event.targetDate).toLocaleString('de-DE')}`)
                         ),
-                        React.createElement("button", { onClick: () => onDeleteEvent(event.id), className: "text-stone-400 hover:text-red-500 p-2" }, React.createElement(TrashIcon, { className: "w-5 h-5" }))
+                        React.createElement("button", { onClick: () => onDeleteEvent(event.id), title: `Ereignis löschen: ${event.name}`, className: "text-stone-400 hover:text-red-500 p-2" }, React.createElement(TrashIcon, { className: "w-5 h-5" }))
                     )
                 )
             ),
@@ -1921,13 +2257,16 @@ const EventTrackerModal = ({ isOpen, onClose, onAddEvent, scheduledEvents, onDel
     );
 };
 
-const ActiveEventsWidget = ({ scheduledEvents, currentDate }) => {
+const ActiveEventsWidget = ({ scheduledEvents, currentDate, sortOrder, onSortOrderChange }) => {
     if (!scheduledEvents || scheduledEvents.length === 0) return null;
 
     return React.createElement("div", { className: "bg-stone-800 bg-opacity-70 rounded-lg p-4 mb-6 border-l-4 border-amber-600" },
-        React.createElement("h2", { className: "font-medieval text-xl text-amber-300 mb-3 flex items-center gap-2" },
-            React.createElement(HourglassIcon, { className: "w-5 h-5" }),
-            "Welt-Ereignisse"
+        React.createElement("div", { className: "tk-events-heading" },
+            React.createElement("h2", { className: "font-medieval text-xl text-amber-300 flex items-center gap-2" },
+                React.createElement(HourglassIcon, { className: "w-5 h-5" }),
+                "Welt-Ereignisse"
+            ),
+            React.createElement(EventSortControl, { id: "widget-event-order", value: sortOrder, onChange: onSortOrderChange })
         ),
         React.createElement("div", { className: "space-y-4" },
             scheduledEvents.map(event => {
@@ -1937,22 +2276,12 @@ const ActiveEventsWidget = ({ scheduledEvents, currentDate }) => {
 
                 const totalDuration = target - start;
                 const elapsed = current - start;
-                let percent = (elapsed / totalDuration) * 100;
+                let percent = Number.isFinite(totalDuration) && totalDuration > 0 ? (elapsed / totalDuration) * 100 : 0;
                 
                 const isExpired = current >= target;
                 if (isExpired) percent = 100;
 
-                const remainingMs = target - current;
-                
-                let timeString = "";
-                if (isExpired) {
-                    timeString = "EREIGNIS EINGETRETEN!";
-                } else {
-                    const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
-                    const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                    const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-                    timeString = `${days} Tage, ${hours} Stunden, ${minutes} Minuten verbleibend`;
-                }
+                const timeString = isExpired ? "EREIGNIS EINGETRETEN!" : `Noch ${formatRemainingTime(event.targetDate, currentDate)}`;
 
                 // Color calculation
                 let barColor = "bg-green-600";
@@ -1961,8 +2290,8 @@ const ActiveEventsWidget = ({ scheduledEvents, currentDate }) => {
                 if (isExpired) barColor = "bg-purple-800"; // Distinctive "Too late" color
 
                 return React.createElement("div", { key: event.id, className: "relative" },
-                    React.createElement("div", { className: "flex justify-between items-end mb-1" },
-                        React.createElement("span", { className: "font-bold text-amber-100 text-sm" }, event.name),
+                    React.createElement("div", { className: "flex flex-wrap gap-x-4 gap-y-1 justify-between items-end mb-1" },
+                        React.createElement("span", { className: "font-bold text-amber-100 text-sm break-words" }, event.name),
                         React.createElement("span", { className: `text-xs font-mono ${isExpired ? 'text-red-400 font-bold animate-pulse' : 'text-amber-200'}` }, timeString)
                     ),
                     React.createElement("div", { className: "w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-stone-600" },
@@ -2001,6 +2330,16 @@ const AppContent = () => {
   const [climateZone, setClimateZone] = useState('temperate');
   const [currentWeather, setCurrentWeather] = useState(null);
   const [scheduledEvents, setScheduledEvents] = useState([]);
+  const [activeTab, setActiveTab] = useState('today');
+  const [eventSortOrder, setEventSortOrder] = useState(() => {
+    try { return localStorage.getItem(EVENT_SORT_STORAGE_KEY) === 'desc' ? 'desc' : 'asc'; }
+    catch { return 'asc'; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(EVENT_SORT_STORAGE_KEY, eventSortOrder); }
+    catch { /* Sorting still works when the browser blocks preference storage. */ }
+  }, [eventSortOrder]);
 
   const { addToast } = useToast();
 
@@ -2009,10 +2348,11 @@ const AppContent = () => {
     if (!saveSlot) return;
     const state = saveSlot.state;
     setCurrentDate(new Date(state.currentDate));
-    setEvents(state.events);
-    setArchivedDays(state.archivedDays);
-    setClimateZone(state.climateZone);
-    setScheduledEvents(state.scheduledEvents || []); // Default to empty array for old saves
+    setEvents(Array.isArray(state.events) ? state.events : []);
+    setArchivedDays(Array.isArray(state.archivedDays) ? state.archivedDays : []);
+    setClimateZone(state.climateZone || 'temperate');
+    setScheduledEvents(Array.isArray(state.scheduledEvents) ? state.scheduledEvents : []);
+    setActiveTab('today');
 
     if (state.currentWeather) {
       const weatherWithDate = {
@@ -2021,7 +2361,7 @@ const AppContent = () => {
       };
       setCurrentWeather(weatherWithDate);
     } else {
-       setCurrentWeather(generateNewWeather(state.climateZone, new Date(state.currentDate)));
+       setCurrentWeather(generateNewWeather(state.climateZone || 'temperate', new Date(state.currentDate)));
     }
     addToast("Spielstand geladen");
   }, [setCurrentDate, addToast]);
@@ -2038,6 +2378,10 @@ const AppContent = () => {
   } = usePersistence(currentDate, events, archivedDays, climateZone, currentWeather, scheduledEvents, loadStateFromSave);
   
   const sunlightData = useMemo(() => calculateSunlight(currentDate, climateZone), [currentDate, climateZone]);
+  const sortedScheduledEvents = useMemo(
+    () => sortEventsByRemainingTime(scheduledEvents, currentDate, eventSortOrder),
+    [scheduledEvents, currentDate, eventSortOrder]
+  );
 
   const handleLoadSave = (saveId) => {
     const saveToLoad = saveSlots.find(s => s.id === saveId);
@@ -2284,15 +2628,20 @@ const AppContent = () => {
     window.location.reload();
   }
 
-  const handleDowntime = (days) => {
-    if (days <= 0) return;
+  const handleDowntime = (days, description = '') => {
+    if (!Number.isSafeInteger(days) || days <= 0) return;
     const startDate = new Date(currentDate.getTime());
     const targetDate = new Date(startDate.getTime());
     targetDate.setDate(targetDate.getDate() + days);
     targetDate.setHours(8, 0, 0, 0);
     const diffMs = targetDate.getTime() - startDate.getTime();
     const diffMinutes = Math.round(diffMs / 60000);
-    handleAddEvent(`${days} Tag(e) Auszeit`, diffMinutes);
+    if (!Number.isFinite(diffMinutes) || diffMinutes <= 0) {
+      addToast("Ungültige Auszeit", "error");
+      return;
+    }
+    const downtimeDescription = [`${days} ${days === 1 ? 'Tag' : 'Tage'} Auszeit`, description.trim()].filter(Boolean).join('\n\n');
+    handleAddEvent(downtimeDescription, diffMinutes);
     setIsDowntimeModalOpen(false);
   };
 
@@ -2334,23 +2683,29 @@ const AppContent = () => {
         formatTimeString: formatTimeString,
         onOpenEventTracker: () => setIsEventTrackerOpen(true)
       }),
-      React.createElement("main", { className: "flex-grow container mx-auto p-4 flex flex-col lg:flex-row gap-8" },
-        React.createElement("div", { className: "lg:w-2/3 xl:w-3/4" },
-          React.createElement(ActiveEventsWidget, { scheduledEvents: scheduledEvents, currentDate: currentDate }),
-          React.createElement(Timeline, { 
-              events: events, 
-              archivedDays: archivedDays, 
-              currentDate: currentDate, 
-              sunlightData: sunlightData,
-              onEditEvent: handleUpdateEvent,
-              onDeleteEvent: handleDeleteEvent
-          })
+      React.createElement("main", { className: "flex-grow container mx-auto p-4" },
+        React.createElement(CampaignTabs, { activeTab, onTabChange: setActiveTab, archiveCount: archivedDays.length }),
+        React.createElement("div", {
+          id: "panel-today", role: "tabpanel", "aria-labelledby": "tab-today", hidden: activeTab !== 'today',
+          className: "flex flex-col lg:flex-row gap-8"
+        },
+          React.createElement("div", { className: "lg:w-2/3 xl:w-3/4 min-w-0" },
+            React.createElement(ActiveEventsWidget, {
+              scheduledEvents: sortedScheduledEvents, currentDate, sortOrder: eventSortOrder, onSortOrderChange: setEventSortOrder
+            }),
+            React.createElement(Timeline, {
+              events, currentDate, sunlightData, onEditEvent: handleUpdateEvent, onDeleteEvent: handleDeleteEvent
+            })
+          ),
+          React.createElement("div", { className: "lg:w-1/3 xl:w-1/4" },
+            React.createElement(WeatherLegend, { currentWeather })
+          )
         ),
-        React.createElement("div", { className: "lg:w-1/3 xl:w-1/4" },
-          React.createElement(WeatherLegend, { currentWeather: currentWeather })
+        React.createElement("div", { id: "panel-archive", role: "tabpanel", "aria-labelledby": "tab-archive", hidden: activeTab !== 'archive' },
+          React.createElement(ArchiveView, { key: activeSaveId, archivedDays })
         )
       ),
-      React.createElement(TimeControls, { onAddEvent: handleAddEvent, onOpenDowntimeModal: () => setIsDowntimeModalOpen(true) }),
+      activeTab === 'today' && React.createElement(TimeControls, { onAddEvent: handleAddEvent, onOpenDowntimeModal: () => setIsDowntimeModalOpen(true) }),
       React.createElement(DowntimeModal, {
         isOpen: isDowntimeModalOpen,
         onClose: () => setIsDowntimeModalOpen(false),
@@ -2390,9 +2745,11 @@ const AppContent = () => {
         isOpen: isEventTrackerOpen,
         onClose: () => setIsEventTrackerOpen(false),
         onAddEvent: handleAddScheduledEvent,
-        scheduledEvents: scheduledEvents,
+        scheduledEvents: sortedScheduledEvents,
         onDeleteEvent: handleDeleteScheduledEvent,
-        currentDate: currentDate
+        currentDate: currentDate,
+        sortOrder: eventSortOrder,
+        onSortOrderChange: setEventSortOrder
       })
     )
   );
@@ -2400,6 +2757,7 @@ const AppContent = () => {
 
 const App = () => {
     return React.createElement(ToastProvider, null,
+        React.createElement(TimekeeperStyles, null),
         React.createElement(AppContent, null)
     );
 };
